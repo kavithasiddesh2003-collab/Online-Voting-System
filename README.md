@@ -144,3 +144,7 @@ http://localhost:3000
 - Mobile application support
 - Biometric authentication
 - Large-scale election scalability
+
+
+# Online Voting System
+This project is maintained by Kavitha Siddesh.
