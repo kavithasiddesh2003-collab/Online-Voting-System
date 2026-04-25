@@ -378,7 +378,7 @@ def tally_election():
         else:
             try:
                 count = paillier.decrypt(aggregated[idx])
-                if count < 0 or count > len(votes) * 10:
+                if count < 0:
                     return jsonify({'error': f'Decryption sanity check failed for {name}'}), 400
                 results[name] = int(count)
             except Exception as ex:
@@ -452,7 +452,7 @@ def tally_election_auto(election_id):
         else:
             try:
                 count = paillier.decrypt(aggregated[idx])
-                if count < 0 or count > len(votes) * 10:
+                if count < 0:
                     return jsonify({'error': f'Decryption sanity check failed for {name}'}), 400
                 results[name] = int(count)
             except Exception as ex:
@@ -476,6 +476,42 @@ def get_results(election_id):
 @app.route('/bulletin', methods=['GET'])
 def get_bulletin():
     return jsonify(_read_bulletin_safe()), 200
+
+
+@app.route('/admin/live-count/<int:election_id>', methods=['GET'])
+@jwt_required()
+def live_vote_count(election_id):
+    phone = get_jwt_identity()
+    u = get_user(phone)
+    if not u or u[4] != 'admin':
+        return jsonify({'error': 'Admin access required'}), 403
+
+    e = get_election(election_id)
+    if not e:
+        return jsonify({'error': 'Election not found'}), 404
+
+    candidates = json.loads(e[2])
+    bulletin = _read_bulletin_safe()
+    votes = [v for v in bulletin if v.get('election_id') == election_id]
+
+    # Count votes per candidate index from bulletin (candidate_index is stored in plaintext)
+    counts = {name: 0 for name in candidates}
+    for v in votes:
+        try:
+            cdata = json.loads(v['ciphertext'])
+            idx = int(cdata['candidate_index'])
+            if 0 <= idx < len(candidates):
+                counts[candidates[idx]] += 1
+        except Exception:
+            pass
+
+    return jsonify({
+        'election_id': election_id,
+        'name': e[1],
+        'status': e[3],
+        'total_votes': len(votes),
+        'counts': counts
+    }), 200
 
 
 if __name__ == '__main__':

@@ -19,9 +19,10 @@ function Register() {
     const name = `${firstName.trim()} ${lastName.trim()}`.trim();
     if (!name) { setError('Enter your first and last name.'); return; }
     const ph = phone.trim();
-    if (!ph) { setError('Enter your phone number.'); return; }
+    if (!ph || ph.length !== 10) { setError('Enter a valid 10-digit phone number.'); return; }
+    const fullPhone = `+91${ph}`;
     try {
-      const response = await api.post('/register', { name, phone: ph });
+      const response = await api.post('/register', { name, phone: fullPhone });
       setMessage(
         `${response.data.message} You can sign in from the login page once you receive your code.`
       );
@@ -359,15 +360,36 @@ function Register() {
 
           <div className="rg-field">
             <label htmlFor="reg-phone">Phone Number on Voter Roll</label>
-            <input
-              id="reg-phone"
-              type="tel"
-              autoComplete="tel"
-              placeholder="+91 98765 43210"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              required
-            />
+            <div style={{ display: 'flex', alignItems: 'stretch' }}>
+              <span style={{
+                padding: '0.75rem 0.9rem',
+                background: 'rgba(0,229,255,0.08)',
+                border: '1px solid rgba(0,229,255,0.2)',
+                borderRight: 'none',
+                borderRadius: '2px 0 0 2px',
+                color: '#00e5ff',
+                fontFamily: "'Rajdhani', sans-serif",
+                fontSize: '1rem',
+                letterSpacing: '0.04em',
+                userSelect: 'none',
+                whiteSpace: 'nowrap',
+              }}>+91</span>
+              <input
+                id="reg-phone"
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel-national"
+                placeholder=""
+                maxLength={10}
+                value={phone}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                  setPhone(digits);
+                }}
+                style={{ borderRadius: '0 2px 2px 0', flex: 1 }}
+                required
+              />
+            </div>
           </div>
 
           <label className="rg-checkbox">

@@ -14,7 +14,7 @@ function Login({ onLogin }) {
     e.preventDefault();
     setMsg(''); setError('');
     try {
-      const res = await api.post('/auth', { phone: phone.trim(), otp: otp.trim() });
+      const res = await api.post('/auth', { phone: `+91${phone.trim()}`, otp: otp.trim() });
       const { token, user } = res.data;
       onLogin(user, token);
       setMsg('Signed in successfully.');
@@ -27,10 +27,10 @@ function Login({ onLogin }) {
   const requestOtp = async () => {
     setMsg(''); setError('');
     const ph = phone.trim();
-    if (!ph) { setError('Enter your phone number first.'); return; }
+    if (!ph || ph.length !== 10) { setError('Enter a valid 10-digit phone number.'); return; }
     setSending(true);
     try {
-      await api.post('/request-otp', { phone: ph });
+      await api.post('/request-otp', { phone: `+91${ph}` });
       setMsg('A one-time code was sent to your phone. If SMS is not configured, see the server console.');
     } catch (err) {
       setError(err.response?.data?.error || 'Could not send code.');
@@ -344,15 +344,36 @@ function Login({ onLogin }) {
           {/* Phone number */}
           <div className="lg-field">
             <label htmlFor="login-phone">Phone Number</label>
-            <input
-              id="login-phone"
-              type="tel"
-              autoComplete="tel"
-              placeholder="+91 98765 43210"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              required
-            />
+            <div style={{ display: 'flex', alignItems: 'stretch' }}>
+              <span style={{
+                padding: '0.75rem 0.9rem',
+                background: 'rgba(0,229,255,0.08)',
+                border: '1px solid rgba(0,229,255,0.2)',
+                borderRight: 'none',
+                borderRadius: '2px 0 0 2px',
+                color: '#00e5ff',
+                fontFamily: "'Rajdhani', sans-serif",
+                fontSize: '1rem',
+                letterSpacing: '0.04em',
+                userSelect: 'none',
+                whiteSpace: 'nowrap',
+              }}>+91</span>
+              <input
+                id="login-phone"
+                type="tel"
+                inputMode="numeric"
+                autoComplete="tel-national"
+                placeholder=""
+                maxLength={10}
+                value={phone}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+                  setPhone(digits);
+                }}
+                style={{ borderRadius: '0 2px 2px 0', flex: 1 }}
+                required
+              />
+            </div>
           </div>
 
           {/* OTP row */}
