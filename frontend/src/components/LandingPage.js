@@ -386,7 +386,7 @@ export default function LandingPage() {
 
       {/* FOOTER */}
       <footer className="lp-footer">
-        © 2026 BALLOTHUB — DECENTRALIZED VOTING PROTOCOL — ALL TRANSACTIONS CRYPTOGRAPHICALLY SECURED
+        DECENTRALIZED VOTING PROTOCOL — ALL TRANSACTIONS CRYPTOGRAPHICALLY SECURED
       </footer>
     </div>
   );

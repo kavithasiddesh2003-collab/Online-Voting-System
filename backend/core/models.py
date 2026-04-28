@@ -40,19 +40,18 @@ def init_db():
     c = conn.cursor()
 
     if USE_MYSQL:
-        c.execute(
-            """
+        c.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 name VARCHAR(255) NOT NULL,
-                phone VARCHAR(20) NOT NULL UNIQUE,
+                phone VARCHAR(20) UNIQUE,
+                email VARCHAR(320) UNIQUE,
+                password_hash VARCHAR(255),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 role VARCHAR(32) DEFAULT 'voter'
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """
-        )
-        c.execute(
-            """
+        """)
+        c.execute("""
             CREATE TABLE IF NOT EXISTS elections (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 name VARCHAR(512) NOT NULL,
@@ -63,10 +62,8 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 end_time VARCHAR(64) NULL
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """
-        )
-        c.execute(
-            """
+        """)
+        c.execute("""
             CREATE TABLE IF NOT EXISTS votes (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 user_id INT NOT NULL,
@@ -76,20 +73,18 @@ def init_db():
                 CONSTRAINT fk_votes_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 CONSTRAINT fk_votes_election FOREIGN KEY (election_id) REFERENCES elections(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-            """
-        )
+        """)
     else:
-        c.execute(
-            """CREATE TABLE IF NOT EXISTS users (
+        c.execute("""CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
-            phone TEXT UNIQUE NOT NULL,
+            phone TEXT UNIQUE,
+            email TEXT UNIQUE,
+            password_hash TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             role TEXT DEFAULT 'voter'
-        )"""
-        )
-        c.execute(
-            """CREATE TABLE IF NOT EXISTS elections (
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS elections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             candidates_json TEXT NOT NULL,
@@ -98,17 +93,14 @@ def init_db():
             results_json TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             end_time TEXT
-        )"""
-        )
-        c.execute(
-            """CREATE TABLE IF NOT EXISTS votes (
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS votes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
             election_id INTEGER NOT NULL,
             voted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(user_id, election_id)
-        )"""
-        )
+        )""")
         try:
             c.execute("SELECT end_time FROM elections LIMIT 1")
         except sqlite3.OperationalError:
@@ -121,31 +113,36 @@ def init_db():
 
 def seed_users_from_csv():
     """
-    Expects users.csv with columns: name, phone, role
-    Phone numbers should be in E.164 format, e.g. +919876543210
+    CSV columns: name, phone, role, email, password
+    - Voters  : need name + phone
+    - Admins  : need name + email + password (phone optional)
     """
     if not os.path.exists(USERS_CSV):
         return
+    from werkzeug.security import generate_password_hash
     conn = get_conn()
     c = conn.cursor()
     with open(USERS_CSV, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            name  = (row.get("name") or "").strip()
-            phone = (row.get("phone") or "").strip()
-            role  = (row.get("role") or "voter").strip().lower()
-            if not name or not phone or not phone.startswith("+"):
+            name     = (row.get("name") or "").strip()
+            phone    = (row.get("phone") or "").strip() or None
+            email    = (row.get("email") or "").strip().lower() or None
+            password = (row.get("password") or "").strip() or None
+            role     = (row.get("role") or "voter").strip().lower()
+            if not name:
                 continue
+            pwd_hash = generate_password_hash(password) if password else None
             try:
                 if USE_MYSQL:
                     c.execute(
-                        "INSERT IGNORE INTO users (name,phone,role) VALUES (%s,%s,%s)",
-                        (name, phone, role),
+                        "INSERT IGNORE INTO users (name,phone,email,password_hash,role) VALUES (%s,%s,%s,%s,%s)",
+                        (name, phone, email, pwd_hash, role),
                     )
                 else:
                     c.execute(
-                        "INSERT OR IGNORE INTO users (name,phone,role) VALUES (?,?,?)",
-                        (name, phone, role),
+                        "INSERT OR IGNORE INTO users (name,phone,email,password_hash,role) VALUES (?,?,?,?,?)",
+                        (name, phone, email, pwd_hash, role),
                     )
             except Exception:
                 pass
@@ -158,11 +155,24 @@ def reload_users_from_csv():
 
 
 def get_user(phone):
-    """Return (id, name, phone, created_at, role) or None."""
+    """Return (id, name, phone, created_at, role) or None — lookup by phone."""
     conn = get_conn()
     c = conn.cursor()
     c.execute(
         f"SELECT id,name,phone,created_at,role FROM users WHERE phone={PH}", (phone,)
+    )
+    row = c.fetchone()
+    conn.close()
+    return row
+
+
+def get_admin_by_email(email):
+    """Return (id, name, email, password_hash, role) or None — lookup admin by email."""
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute(
+        f"SELECT id,name,email,password_hash,role FROM users WHERE email={PH} AND role='admin'",
+        (email.strip().lower(),)
     )
     row = c.fetchone()
     conn.close()

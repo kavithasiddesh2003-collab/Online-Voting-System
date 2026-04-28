@@ -13,7 +13,7 @@ _BACKEND_DIR = os.path.join(os.path.dirname(__file__), "..")
 load_dotenv(os.path.join(_BACKEND_DIR, ".env"))
 
 from models import (
-    init_db, get_user, get_election, create_election,
+    init_db, get_user, get_admin_by_email, get_election, create_election,
     update_election, get_all_elections, has_voted, mark_voted,
     reload_users_from_csv, delete_election
 )
@@ -83,6 +83,30 @@ def _normalize_phone(raw):
     return phone
 
 
+
+def _parse_candidates(candidates_json):
+    """Parse candidates - handles both old (list of strings) and new (list of dicts) format."""
+    data = json.loads(candidates_json)
+    if data and isinstance(data[0], dict):
+        return [c["name"] for c in data]
+    return data
+
+def _get_current_user():
+    """
+    Resolve JWT identity to a user tuple (id, name, phone_or_email, created_at, role).
+    Handles both voter (phone) and admin (admin:email) identities.
+    """
+    identity = get_jwt_identity()
+    if identity and identity.startswith("admin:"):
+        email = identity[len("admin:"):]
+        admin = get_admin_by_email(email)
+        if admin:
+            # Return same shape as get_user: (id, name, identifier, created_at, role)
+            return (admin[0], admin[1], admin[2], None, admin[4])
+        return None
+    return get_user(identity)
+
+
 @app.route('/register', methods=['POST'])
 def register():
     data = request.json or {}
@@ -118,12 +142,34 @@ def request_otp_route():
 @app.route('/admin/reload-users', methods=['POST'])
 @jwt_required()
 def admin_reload_users():
-    phone = get_jwt_identity()
-    u = get_user(phone)
+    u = _get_current_user()
     if not u or u[4] != 'admin':
         return jsonify({'error': 'Admin access required'}), 403
     reload_users_from_csv()
     return jsonify({'message': 'Users reloaded from CSV'}), 200
+
+
+@app.route('/admin-login', methods=['POST'])
+def admin_login():
+    """Admin login with email + password."""
+    from werkzeug.security import check_password_hash
+    data = request.json or {}
+    email    = data.get('email', '').strip().lower()
+    password = data.get('password', '').strip()
+    if not email or not password:
+        return jsonify({'error': 'Email and password required'}), 400
+    admin = get_admin_by_email(email)
+    if not admin:
+        return jsonify({'error': 'Admin account not found'}), 403
+    # admin = (id, name, email, password_hash, role)
+    if not admin[3] or not check_password_hash(admin[3], password):
+        return jsonify({'error': 'Invalid password'}), 401
+    # Use email as JWT identity for admins
+    token = create_access_token(identity=f"admin:{email}")
+    return jsonify({
+        'token': token,
+        'user': {'id': admin[0], 'name': admin[1], 'email': admin[2], 'role': admin[4]}
+    }), 200
 
 
 @app.route('/auth', methods=['POST'])
@@ -157,31 +203,49 @@ def authenticate():
 @jwt_required()
 def list_elections():
     elections = get_all_elections()
-    return jsonify([{
-        'id': e[0],
-        'name': e[1],
-        'candidates': json.loads(e[2]),
-        'status': e[3],
-        'public_key': json.loads(e[4]) if e[4] else None,
-        'end_time': e[6] if len(e) > 6 else None
-    } for e in elections]), 200
+    result = []
+    for e in elections:
+        candidates_data = json.loads(e[2])
+        # candidates_data can be a list of names or list of dicts with name/photo
+        if candidates_data and isinstance(candidates_data[0], dict):
+            names  = [c['name'] for c in candidates_data]
+            photos = [c.get('photo', '') for c in candidates_data]
+        else:
+            names  = candidates_data
+            photos = []
+        result.append({
+            'id': e[0],
+            'name': e[1],
+            'candidates': names,
+            'candidate_photos': photos,
+            'status': e[3],
+            'public_key': json.loads(e[4]) if e[4] else None,
+            'end_time': e[6] if len(e) > 6 else None
+        })
+    return jsonify(result), 200
 
 
 @app.route('/admin/election', methods=['POST'])
 @jwt_required()
 def create_new_election():
-    phone = get_jwt_identity()
-    u = get_user(phone)
+    u = _get_current_user()
     if not u or u[4] != 'admin':
         return jsonify({'error': 'Admin access required'}), 403
 
     data = request.json or {}
     name = data.get('name', '').strip()
     candidates = data.get('candidates', [])
+    candidate_photos = data.get('candidate_photos', [])
     duration_minutes = data.get('duration_minutes', 0)
 
     if not name or not isinstance(candidates, list) or len(candidates) < 2:
         return jsonify({'error': 'Invalid election data'}), 400
+
+    # Store candidates as list of dicts with name and photo
+    candidates_with_photos = [
+        {'name': c, 'photo': candidate_photos[i] if i < len(candidate_photos) else ''}
+        for i, c in enumerate(candidates)
+    ]
 
     paillier = PaillierCrypto()
     public_key, private_key = paillier.generate_keypair()
@@ -195,7 +259,7 @@ def create_new_election():
         end_ist = now_ist + timedelta(minutes=duration_minutes)
         end_time = end_ist.isoformat()
 
-    eid = create_election(name, json.dumps(candidates), json.dumps(public_key_str), end_time)
+    eid = create_election(name, json.dumps(candidates_with_photos), json.dumps(public_key_str), end_time)
 
     trust = {}
     if os.path.exists(TRUSTEE_FILE):
@@ -226,8 +290,7 @@ def create_new_election():
 @app.route('/admin/election/<int:election_id>', methods=['DELETE'])
 @jwt_required()
 def delete_election_route(election_id):
-    phone = get_jwt_identity()
-    u = get_user(phone)
+    u = _get_current_user()
     if not u or u[4] != 'admin':
         return jsonify({'error': 'Admin access required'}), 403
 
@@ -237,6 +300,7 @@ def delete_election_route(election_id):
 
     delete_election(election_id)
 
+    # Clean trustee shares
     if os.path.exists(TRUSTEE_FILE):
         try:
             with open(TRUSTEE_FILE, 'r', encoding='utf-8') as f:
@@ -248,14 +312,21 @@ def delete_election_route(election_id):
         except Exception:
             pass
 
+    # Clean bulletin entries for this election
+    try:
+        bulletin = _read_bulletin_safe()
+        cleaned = [v for v in bulletin if v.get('election_id') != election_id]
+        _write_bulletin_safe(cleaned)
+    except Exception:
+        pass
+
     return jsonify({'message': 'Election deleted'}), 200
 
 
 @app.route('/admin/election/<int:election_id>/shares', methods=['GET'])
 @jwt_required()
 def get_election_shares(election_id):
-    phone = get_jwt_identity()
-    u = get_user(phone)
+    u = _get_current_user()
     if not u or u[4] != 'admin':
         return jsonify({'error': 'Admin access required'}), 403
 
@@ -275,8 +346,7 @@ def get_election_shares(election_id):
 @app.route('/vote', methods=['POST'])
 @jwt_required()
 def cast_vote():
-    phone = get_jwt_identity()
-    user = get_user(phone)
+    user = _get_current_user()
     if not user:
         return jsonify({'error': 'User not found'}), 404
     if user[4] == 'admin':
@@ -322,8 +392,7 @@ def cast_vote():
 @app.route('/admin/tally', methods=['POST'])
 @jwt_required()
 def tally_election():
-    phone = get_jwt_identity()
-    u = get_user(phone)
+    u = _get_current_user()
     if not u or u[4] != 'admin':
         return jsonify({'error': 'Admin access required'}), 403
 
@@ -338,7 +407,7 @@ def tally_election():
     if not e:
         return jsonify({'error': 'Election not found'}), 404
 
-    candidates = json.loads(e[2])
+    candidates = _parse_candidates(e[2])
     public_key = json.loads(e[4])
 
     bulletin = _read_bulletin_safe()
@@ -391,8 +460,7 @@ def tally_election():
 @app.route('/admin/tally-auto/<int:election_id>', methods=['POST'])
 @jwt_required()
 def tally_election_auto(election_id):
-    phone = get_jwt_identity()
-    u = get_user(phone)
+    u = _get_current_user()
     if not u or u[4] != 'admin':
         return jsonify({'error': 'Admin access required'}), 403
 
@@ -412,7 +480,7 @@ def tally_election_auto(election_id):
     except Exception as ex:
         return jsonify({'error': f'Failed to load shares: {str(ex)}'}), 500
 
-    candidates = json.loads(e[2])
+    candidates = _parse_candidates(e[2])
     public_key = json.loads(e[4])
 
     bulletin = _read_bulletin_safe()
@@ -481,8 +549,7 @@ def get_bulletin():
 @app.route('/admin/live-count/<int:election_id>', methods=['GET'])
 @jwt_required()
 def live_vote_count(election_id):
-    phone = get_jwt_identity()
-    u = get_user(phone)
+    u = _get_current_user()
     if not u or u[4] != 'admin':
         return jsonify({'error': 'Admin access required'}), 403
 
