@@ -109,14 +109,37 @@ def _get_current_user():
 
 @app.route('/register', methods=['POST'])
 def register():
+    from werkzeug.security import generate_password_hash
     data = request.json or {}
     raw_phone = data.get('phone', '').strip()
+    name      = data.get('name', '').strip()
+    voter_id  = data.get('voter_id', '').strip() or None
+    dob       = data.get('dob', '').strip() or None
+    password  = data.get('password', '').strip() or None
+
     if not raw_phone:
         return jsonify({'error': 'Phone number required'}), 400
     phone = _normalize_phone(raw_phone)
     user = get_user(phone)
     if not user:
-        return jsonify({'error': 'Registration closed. Phone number not found on voter roll.'}), 403
+        return jsonify({'error': 'Phone number not found on voter roll. Contact admin.'}), 403
+
+    pwd_hash = generate_password_hash(password) if password else None
+
+    # Update voter_id, dob, password_hash if provided
+    if voter_id or dob or pwd_hash:
+        try:
+            conn = __import__('models').get_conn()
+            c = conn.cursor()
+            c.execute(
+                "UPDATE users SET voter_id=?, dob=?, password_hash=? WHERE phone=?",
+                (voter_id, dob, pwd_hash, phone)
+            )
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
+
     code = generate_otp(phone)
     otp_store[phone] = {'otp': code, 'timestamp': time.time(), 'attempts': 0}
     send_otp(phone, code)
@@ -557,7 +580,7 @@ def live_vote_count(election_id):
     if not e:
         return jsonify({'error': 'Election not found'}), 404
 
-    candidates = json.loads(e[2])
+    candidates = _parse_candidates(e[2])
     bulletin = _read_bulletin_safe()
     votes = [v for v in bulletin if v.get('election_id') == election_id]
 

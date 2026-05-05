@@ -43,7 +43,7 @@ function VoterPanel({ token, user }) {
   };
 
   const handleVote = (electionId) => {
-    navigate(`/vote/${electionId}`, { state: { onVoteSuccess: () => markVoted(electionId) } });
+    navigate(`/vote/${electionId}`);
   };
 
   const handleResults = (electionId) => {

@@ -47,6 +47,8 @@ def init_db():
                 phone VARCHAR(20) UNIQUE,
                 email VARCHAR(320) UNIQUE,
                 password_hash VARCHAR(255),
+                voter_id VARCHAR(50),
+                dob VARCHAR(20),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 role VARCHAR(32) DEFAULT 'voter'
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -81,6 +83,8 @@ def init_db():
             phone TEXT UNIQUE,
             email TEXT UNIQUE,
             password_hash TEXT,
+            voter_id TEXT,
+            dob TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             role TEXT DEFAULT 'voter'
         )""")
@@ -113,9 +117,9 @@ def init_db():
 
 def seed_users_from_csv():
     """
-    CSV columns: name, phone, role, email, password
-    - Voters  : need name + phone
-    - Admins  : need name + email + password (phone optional)
+    CSV columns: name, phone, role, email, password, voter_id, dob
+    - Voters : need name + phone
+    - Admins : need name + email + password
     """
     if not os.path.exists(USERS_CSV):
         return
@@ -129,6 +133,8 @@ def seed_users_from_csv():
             phone    = (row.get("phone") or "").strip() or None
             email    = (row.get("email") or "").strip().lower() or None
             password = (row.get("password") or "").strip() or None
+            voter_id = (row.get("voter_id") or "").strip() or None
+            dob      = (row.get("dob") or "").strip() or None
             role     = (row.get("role") or "voter").strip().lower()
             if not name:
                 continue
@@ -136,13 +142,13 @@ def seed_users_from_csv():
             try:
                 if USE_MYSQL:
                     c.execute(
-                        "INSERT IGNORE INTO users (name,phone,email,password_hash,role) VALUES (%s,%s,%s,%s,%s)",
-                        (name, phone, email, pwd_hash, role),
+                        "INSERT IGNORE INTO users (name,phone,email,password_hash,voter_id,dob,role) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                        (name, phone, email, pwd_hash, voter_id, dob, role),
                     )
                 else:
                     c.execute(
-                        "INSERT OR IGNORE INTO users (name,phone,email,password_hash,role) VALUES (?,?,?,?,?)",
-                        (name, phone, email, pwd_hash, role),
+                        "INSERT OR IGNORE INTO users (name,phone,email,password_hash,voter_id,dob,role) VALUES (?,?,?,?,?,?,?)",
+                        (name, phone, email, pwd_hash, voter_id, dob, role),
                     )
             except Exception:
                 pass
@@ -155,7 +161,6 @@ def reload_users_from_csv():
 
 
 def get_user(phone):
-    """Return (id, name, phone, created_at, role) or None — lookup by phone."""
     conn = get_conn()
     c = conn.cursor()
     c.execute(
@@ -167,7 +172,6 @@ def get_user(phone):
 
 
 def get_admin_by_email(email):
-    """Return (id, name, email, password_hash, role) or None — lookup admin by email."""
     conn = get_conn()
     c = conn.cursor()
     c.execute(
@@ -179,10 +183,13 @@ def get_admin_by_email(email):
     return row
 
 
-def create_user(name, phone):
+def create_user(name, phone, voter_id=None, dob=None, password_hash=None):
     conn = get_conn()
     c = conn.cursor()
-    c.execute(f"INSERT INTO users (name,phone) VALUES ({PH},{PH})", (name, phone))
+    c.execute(
+        f"INSERT INTO users (name,phone,voter_id,dob,password_hash) VALUES ({PH},{PH},{PH},{PH},{PH})",
+        (name, phone, voter_id, dob, password_hash)
+    )
     conn.commit()
     conn.close()
 
@@ -270,3 +277,12 @@ def delete_election(election_id):
     c.execute(f"DELETE FROM elections WHERE id={PH}", (election_id,))
     conn.commit()
     conn.close()
+
+
+def get_all_users():
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("SELECT id,name,phone,voter_id,dob,role,created_at FROM users ORDER BY id")
+    rows = c.fetchall()
+    conn.close()
+    return rows
