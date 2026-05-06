@@ -52,7 +52,7 @@ function Register() {
             <div style={s.phoneRow}>
               <span style={s.phonePrefix}>+91</span>
               <input style={{ ...s.input, borderRadius: '0 12px 12px 0', borderLeft: 'none', flex: 1 }}
-                type="tel" inputMode="numeric" placeholder="98765 43210"
+                type="tel" inputMode="numeric" placeholder=""
                 maxLength={10} value={phone}
                 onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} required />
             </div>
@@ -62,7 +62,7 @@ function Register() {
           <div style={s.row2}>
             <div style={{ ...s.fieldGroup, flex: 1 }}>
               <label style={s.label}>VOTER ID</label>
-              <input style={s.input} type="text" placeholder="e.g. VOT12345"
+              <input style={s.input} type="text" placeholder=""
                 value={voterId} onChange={e => setVoterId(e.target.value)} />
             </div>
             <div style={{ ...s.fieldGroup, flex: 1 }}>
@@ -76,12 +76,12 @@ function Register() {
           <div style={s.row2}>
             <div style={{ ...s.fieldGroup, flex: 1 }}>
               <label style={s.label}>PASSWORD</label>
-              <input style={s.input} type="password" placeholder="Min 8 chars"
+              <input style={s.input} type="password" placeholder=""
                 value={password} onChange={e => setPassword(e.target.value)} required />
             </div>
             <div style={{ ...s.fieldGroup, flex: 1 }}>
               <label style={s.label}>CONFIRM</label>
-              <input style={s.input} type="password" placeholder="Re-enter"
+              <input style={s.input} type="password" placeholder=""
                 value={confirm} onChange={e => setConfirm(e.target.value)} required />
             </div>
           </div>
