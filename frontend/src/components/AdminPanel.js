@@ -63,13 +63,83 @@ const liveStyles = {
   fill: { height: '100%', borderRadius: '7px', transition: 'width 0.5s ease' }
 };
 
-function AdminPanel({ token }) {
+function VoterStatus({ electionId, electionName, token }) {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 10000);
+    return () => clearInterval(interval);
+  }, [electionId]);
+
+  const fetchStatus = async () => {
+    try {
+      const res = await api.get(`/admin/voter-status/${electionId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setData(res.data);
+    } catch {}
+    finally { setLoading(false); }
+  };
+
+  if (loading) return <div style={{ color: '#8899AA', padding: '0.5rem' }}>Loading voter list...</div>;
+  if (!data) return null;
+
+  return (
+    <div style={vsStyles.box}>
+      <div style={vsStyles.header}>
+        👥 Voter Status — <span style={{ color: '#8CFAC7' }}>{data.total_voted}</span>
+        <span style={{ color: '#8899AA' }}> / {data.total_voters} voted</span>
+        <span style={{ fontSize: '0.72rem', color: '#8899AA', marginLeft: '0.5rem' }}>(refreshes every 10s)</span>
+      </div>
+      <div style={vsStyles.tableWrap}>
+        <table style={vsStyles.table}>
+          <thead>
+            <tr>
+              <th style={vsStyles.th}>Name</th>
+              <th style={vsStyles.th}>Phone</th>
+              <th style={vsStyles.th}>Voter ID</th>
+              <th style={vsStyles.th}>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.voters.map(v => (
+              <tr key={v.id} style={{ borderBottom: '1px solid #1E2B44' }}>
+                <td style={vsStyles.td}>{v.name}</td>
+                <td style={vsStyles.td}>{v.phone || '—'}</td>
+                <td style={vsStyles.td}>{v.voter_id || '—'}</td>
+                <td style={vsStyles.td}>
+                  {v.voted
+                    ? <span style={vsStyles.voted}>✅ Voted</span>
+                    : <span style={vsStyles.notVoted}>⏳ Not yet</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+const vsStyles = {
+  box: { marginTop: '0.8rem', background: '#0B1220', border: '1px solid #263250', borderRadius: '10px', padding: '1rem' },
+  header: { fontSize: '0.88rem', fontWeight: 700, marginBottom: '0.8rem', color: '#E6EEF8' },
+  tableWrap: { overflowX: 'auto' },
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' },
+  th: { textAlign: 'left', padding: '0.5rem 0.8rem', color: '#6CA2FF', fontWeight: 700, borderBottom: '1px solid #263250', whiteSpace: 'nowrap' },
+  td: { padding: '0.5rem 0.8rem', color: '#E6EEF8' },
+  voted: { background: '#1B3A2F', color: '#8CFAC7', border: '1px solid #2E6B50', padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 700 },
+  notVoted: { background: '#2A2000', color: '#FFA726', border: '1px solid #7A5200', padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 700 }
+};
   const [electionName, setElectionName] = useState('');
   const [durationMinutes, setDurationMinutes] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [elections, setElections] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
+  const [voterStatusId, setVoterStatusId] = useState(null);
   // candidateRows: [{name, photo}]
   const [candidateRows, setCandidateRows] = useState([{ name: '', photo: '' }, { name: '', photo: '' }]);
   const navigate = useNavigate();
@@ -219,6 +289,9 @@ function AdminPanel({ token }) {
                   <button onClick={() => toggleExpand(e.id)} style={styles.buttonLive}>
                     {expandedId === e.id ? '▲ Hide' : '📊 Live Count'}
                   </button>
+                  <button onClick={() => setVoterStatusId(voterStatusId === e.id ? null : e.id)} style={styles.buttonVoters}>
+                    {voterStatusId === e.id ? '▲ Hide Voters' : '👥 Who Voted'}
+                  </button>
                   {e.status === 'active' && isVotingEnded(e) && (
                     <button onClick={() => autoTally(e.id)} style={styles.buttonSuccess}>Tally</button>
                   )}
@@ -255,6 +328,7 @@ function AdminPanel({ token }) {
               )}
 
               {expandedId === e.id && <LiveResults electionId={e.id} token={token} />}
+              {voterStatusId === e.id && <VoterStatus electionId={e.id} electionName={e.name} token={token} />}
             </div>
           </div>
         ))}
@@ -290,6 +364,7 @@ const styles = {
   buttonSuccess: { padding: '0.6rem 0.9rem', background: '#3EB489', color: '#0B101A', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' },
   buttonInfo: { padding: '0.6rem 0.9rem', background: '#FFA726', color: '#0B101A', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' },
   buttonLive: { padding: '0.6rem 0.9rem', background: '#1B2B44', color: '#6CA2FF', border: '1px solid #6CA2FF44', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' },
+  buttonVoters: { padding: '0.6rem 0.9rem', background: '#1B3A2F', color: '#8CFAC7', border: '1px solid #2E6B5044', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' },
   success: { color: '#8CFAC7', marginTop: '0.6rem' },
   error: { color: '#FF8686', marginTop: '0.6rem' },
 };

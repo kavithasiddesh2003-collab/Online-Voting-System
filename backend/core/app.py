@@ -564,7 +564,45 @@ def get_results(election_id):
     return jsonify({'election_id': election_id, 'name': e[1], 'status': e[3], 'results': res}), 200
 
 
-@app.route('/bulletin', methods=['GET'])
+@app.route('/admin/voters/<int:election_id>', methods=['GET'])
+@jwt_required()
+def get_voter_list(election_id):
+    u = _get_current_user()
+    if not u or u[4] != 'admin':
+        return jsonify({'error': 'Admin access required'}), 403
+
+    e = get_election(election_id)
+    if not e:
+        return jsonify({'error': 'Election not found'}), 404
+
+    conn = get_conn()
+    c = conn.cursor()
+
+    # Get all voters
+    c.execute("SELECT id, name, phone FROM users WHERE role='voter'")
+    all_voters = c.fetchall()
+
+    # Get who voted in this election
+    c.execute("SELECT user_id FROM votes WHERE election_id=?", (election_id,))
+    voted_ids = set(row[0] for row in c.fetchall())
+    conn.close()
+
+    voters = []
+    for v in all_voters:
+        voters.append({
+            'id': v[0],
+            'name': v[1],
+            'phone': v[2],
+            'voted': v[0] in voted_ids
+        })
+
+    return jsonify({
+        'election_id': election_id,
+        'election_name': e[1],
+        'total_voters': len(voters),
+        'voted_count': len(voted_ids),
+        'voters': voters
+    }), 200
 def get_bulletin():
     return jsonify(_read_bulletin_safe()), 200
 
@@ -580,7 +618,7 @@ def live_vote_count(election_id):
     if not e:
         return jsonify({'error': 'Election not found'}), 404
 
-    candidates = _parse_candidates(e[2])
+    candidates = json.loads(e[2])
     bulletin = _read_bulletin_safe()
     votes = [v for v in bulletin if v.get('election_id') == election_id]
 
@@ -601,6 +639,48 @@ def live_vote_count(election_id):
         'status': e[3],
         'total_votes': len(votes),
         'counts': counts
+    }), 200
+
+
+@app.route('/admin/voter-status/<int:election_id>', methods=['GET'])
+@jwt_required()
+def voter_status(election_id):
+    """Returns list of all voters with voted/not voted status for an election."""
+    u = _get_current_user()
+    if not u or u[4] != 'admin':
+        return jsonify({'error': 'Admin access required'}), 403
+
+    e = get_election(election_id)
+    if not e:
+        return jsonify({'error': 'Election not found'}), 404
+
+    # Get all voters
+    all_users = get_all_users()
+    voters = [usr for usr in all_users if usr[5] == 'voter']  # role is index 5
+
+    # Get who voted
+    conn = __import__('models').get_conn()
+    c = conn.cursor()
+    c.execute("SELECT user_id FROM votes WHERE election_id=?", (election_id,))
+    voted_ids = {row[0] for row in c.fetchall()}
+    conn.close()
+
+    result = []
+    for usr in voters:
+        result.append({
+            'id': usr[0],
+            'name': usr[1],
+            'phone': usr[2],
+            'voter_id': usr[3],
+            'voted': usr[0] in voted_ids
+        })
+
+    return jsonify({
+        'election_id': election_id,
+        'election_name': e[1],
+        'total_voters': len(result),
+        'total_voted': len(voted_ids),
+        'voters': result
     }), 200
 
 
