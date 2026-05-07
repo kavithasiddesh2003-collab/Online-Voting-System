@@ -32,11 +32,14 @@ def get_conn():
             cursorclass=pymysql.cursors.Cursor,
             autocommit=False,
         )
-    return sqlite3.connect(DB_PATH)
+    return sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
 
 
 def init_db():
     conn = get_conn()
+    if not USE_MYSQL:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA busy_timeout=30000")
     c = conn.cursor()
 
     if USE_MYSQL:

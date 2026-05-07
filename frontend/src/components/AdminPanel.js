@@ -43,7 +43,7 @@ function LiveResults({ electionId, token }) {
               <span style={{ ...liveStyles.count, color }}>{count} vote{count !== 1 ? 's' : ''} ({pct}%)</span>
             </div>
             <div style={liveStyles.track}>
-              <div style={{ ...liveStyles.fill, width: `${pct}%`, background: `linear-gradient(90deg, ${color}, ${color}88)`, boxShadow: `0 0 8px ${color}66` }} />
+              <div style={{ ...liveStyles.fill, width: `${pct}%`, background: `linear-gradient(90deg, ${color}, ${color}88)` }} />
             </div>
           </div>
         );
@@ -63,7 +63,7 @@ const liveStyles = {
   fill: { height: '100%', borderRadius: '7px', transition: 'width 0.5s ease' }
 };
 
-function VoterStatus({ electionId, electionName, token }) {
+function VoterStatus({ electionId, token }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -89,7 +89,8 @@ function VoterStatus({ electionId, electionName, token }) {
   return (
     <div style={vsStyles.box}>
       <div style={vsStyles.header}>
-        👥 Voter Status — <span style={{ color: '#8CFAC7' }}>{data.total_voted}</span>
+        👥 Voter Status —
+        <span style={{ color: '#8CFAC7' }}> {data.total_voted}</span>
         <span style={{ color: '#8899AA' }}> / {data.total_voters} voted</span>
         <span style={{ fontSize: '0.72rem', color: '#8899AA', marginLeft: '0.5rem' }}>(refreshes every 10s)</span>
       </div>
@@ -133,6 +134,8 @@ const vsStyles = {
   voted: { background: '#1B3A2F', color: '#8CFAC7', border: '1px solid #2E6B50', padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 700 },
   notVoted: { background: '#2A2000', color: '#FFA726', border: '1px solid #7A5200', padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 700 }
 };
+
+function AdminPanel({ token }) {
   const [electionName, setElectionName] = useState('');
   const [durationMinutes, setDurationMinutes] = useState('');
   const [message, setMessage] = useState('');
@@ -140,7 +143,6 @@ const vsStyles = {
   const [elections, setElections] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
   const [voterStatusId, setVoterStatusId] = useState(null);
-  // candidateRows: [{name, photo}]
   const [candidateRows, setCandidateRows] = useState([{ name: '', photo: '' }, { name: '', photo: '' }]);
   const navigate = useNavigate();
 
@@ -225,6 +227,7 @@ const vsStyles = {
 
   const isVotingEnded = (e) => !e.end_time || new Date() > new Date(e.end_time);
   const toggleExpand = (id) => setExpandedId(expandedId === id ? null : id);
+  const toggleVoterStatus = (id) => setVoterStatusId(voterStatusId === id ? null : id);
 
   return (
     <div style={styles.container}>
@@ -246,12 +249,10 @@ const vsStyles = {
           {candidateRows.map((row, idx) => (
             <div key={idx} style={styles.candidateRow}>
               <div style={styles.candidatePhotoPreview}>
-                {row.photo ? (
-                  <img src={row.photo} alt="" style={styles.previewImg}
-                    onError={e => { e.target.style.display = 'none'; }} />
-                ) : (
-                  <div style={styles.previewPlaceholder}>👤</div>
-                )}
+                {row.photo
+                  ? <img src={row.photo} alt="" style={styles.previewImg} onError={e => { e.target.style.display = 'none'; }} />
+                  : <div style={styles.previewPlaceholder}>👤</div>
+                }
               </div>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                 <input type="text" placeholder={`Candidate ${idx + 1} name`}
@@ -281,7 +282,12 @@ const vsStyles = {
               <div style={styles.electionRow}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                   <strong>ID: {e.id}</strong> — {e.name}
-                  <span style={{ ...styles.statusBadge, background: e.status === 'active' ? '#1B3A2F' : '#2A2000', color: e.status === 'active' ? '#8CFAC7' : '#FFA726', border: `1px solid ${e.status === 'active' ? '#2E6B50' : '#7A5200'}` }}>
+                  <span style={{
+                    ...styles.statusBadge,
+                    background: e.status === 'active' ? '#1B3A2F' : '#2A2000',
+                    color: e.status === 'active' ? '#8CFAC7' : '#FFA726',
+                    border: `1px solid ${e.status === 'active' ? '#2E6B50' : '#7A5200'}`
+                  }}>
                     {e.status.toUpperCase()}
                   </span>
                 </div>
@@ -289,7 +295,7 @@ const vsStyles = {
                   <button onClick={() => toggleExpand(e.id)} style={styles.buttonLive}>
                     {expandedId === e.id ? '▲ Hide' : '📊 Live Count'}
                   </button>
-                  <button onClick={() => setVoterStatusId(voterStatusId === e.id ? null : e.id)} style={styles.buttonVoters}>
+                  <button onClick={() => toggleVoterStatus(e.id)} style={styles.buttonVoters}>
                     {voterStatusId === e.id ? '▲ Hide Voters' : '👥 Who Voted'}
                   </button>
                   {e.status === 'active' && isVotingEnded(e) && (
@@ -303,18 +309,16 @@ const vsStyles = {
                 </div>
               </div>
 
-              {/* Candidate photos preview */}
+              {/* Candidate chips with photos */}
               <div style={{ display: 'flex', gap: '0.6rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
                 {e.candidates.map((c, i) => {
                   const photo = e.candidate_photos && e.candidate_photos[i];
                   return (
                     <div key={i} style={styles.candidateChipWithPhoto}>
-                      {photo ? (
-                        <img src={photo} alt={c} style={styles.chipPhoto}
-                          onError={ev => { ev.target.style.display = 'none'; }} />
-                      ) : (
-                        <div style={styles.chipPhotoPlaceholder}>👤</div>
-                      )}
+                      {photo
+                        ? <img src={photo} alt={c} style={styles.chipPhoto} onError={ev => { ev.target.style.display = 'none'; }} />
+                        : <div style={styles.chipPhotoPlaceholder}>👤</div>
+                      }
                       <span style={{ fontSize: '0.78rem', color: '#A0B4D0' }}>{c}</span>
                     </div>
                   );
@@ -328,7 +332,7 @@ const vsStyles = {
               )}
 
               {expandedId === e.id && <LiveResults electionId={e.id} token={token} />}
-              {voterStatusId === e.id && <VoterStatus electionId={e.id} electionName={e.name} token={token} />}
+              {voterStatusId === e.id && <VoterStatus electionId={e.id} token={token} />}
             </div>
           </div>
         ))}

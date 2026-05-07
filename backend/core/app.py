@@ -15,7 +15,7 @@ load_dotenv(os.path.join(_BACKEND_DIR, ".env"))
 from models import (
     init_db, get_user, get_admin_by_email, get_election, create_election,
     update_election, get_all_elections, has_voted, mark_voted,
-    reload_users_from_csv, delete_election
+    reload_users_from_csv, delete_election, get_all_users
 )
 from crypto import (
     PaillierCrypto, generate_trustee_shares, combine_shares, sign_data
@@ -618,7 +618,7 @@ def live_vote_count(election_id):
     if not e:
         return jsonify({'error': 'Election not found'}), 404
 
-    candidates = json.loads(e[2])
+    candidates = _parse_candidates(e[2])
     bulletin = _read_bulletin_safe()
     votes = [v for v in bulletin if v.get('election_id') == election_id]
 
