@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import LandingPage from './LandingPage';
 import Login from './Login';
 import Register from './Register';
@@ -8,6 +8,36 @@ import VoteForm from './VoteForm';
 import AdminPanel from './AdminPanel';
 import Results from './Results';
 import VoterPanel from './VoterPanel';
+
+function NavBar({ user, onLogout }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const dashboardPath = user.role === 'admin' ? '/admin' : '/voter';
+  const dashboardLabel = user.role === 'admin' ? 'Admin Panel' : 'Voter Dashboard';
+
+  // Show back button only when NOT on the main dashboard
+  const isOnDashboard = location.pathname === dashboardPath;
+
+  return (
+    <nav style={styles.nav}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        {!isOnDashboard && (
+          <button onClick={() => navigate(-1)} style={styles.backBtn}>
+            ← Back
+          </button>
+        )}
+        <Link to={dashboardPath} style={styles.link}>
+          {dashboardLabel}
+        </Link>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <span style={{ color: '#E6EEF8' }}>Welcome, {user.name}</span>
+        <button onClick={onLogout} style={styles.logoutBtn}>Logout</button>
+      </div>
+    </nav>
+  );
+}
 
 function App() {
   const [user, setUser] = useState(null);
@@ -26,22 +56,7 @@ function App() {
   return (
     <Router>
       <div>
-        {user && (
-          <nav style={styles.nav}>
-            <div>
-              <Link
-                to={user.role === 'admin' ? '/admin' : '/voter'}
-                style={styles.link}
-              >
-                {user.role === 'admin' ? 'Admin Panel' : 'Voter Dashboard'}
-              </Link>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <span style={{ color: '#E6EEF8' }}>Welcome, {user.name}</span>
-              <button onClick={handleLogout} style={styles.logoutBtn}>Logout</button>
-            </div>
-          </nav>
-        )}
+        {user && <NavBar user={user} onLogout={handleLogout} />}
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route
@@ -52,12 +67,10 @@ function App() {
             path="/register"
             element={!user ? <Register /> : <Navigate to={user.role === 'admin' ? '/admin' : '/voter'} />}
           />
-          {/* Voter Panel - main page for voters */}
           <Route
             path="/voter"
             element={user && user.role !== 'admin' ? <VoterPanel token={token} user={user} /> : <Navigate to="/login" />}
           />
-          {/* Keep /elections for backward compat */}
           <Route
             path="/elections"
             element={user ? <ElectionList token={token} user={user} /> : <Navigate to="/login" />}
@@ -93,6 +106,16 @@ const styles = {
     textDecoration: 'none',
     fontWeight: 'bold',
     fontSize: '1.1rem'
+  },
+  backBtn: {
+    background: '#1B2537',
+    color: '#6CA2FF',
+    border: '1px solid #6CA2FF44',
+    padding: '0.5rem 1rem',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+    fontSize: '0.9rem'
   },
   logoutBtn: {
     background: '#FF6B6B',

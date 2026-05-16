@@ -346,7 +346,48 @@ def delete_election_route(election_id):
     return jsonify({'message': 'Election deleted'}), 200
 
 
-@app.route('/admin/election/<int:election_id>/shares', methods=['GET'])
+@app.route('/admin/election/<int:election_id>', methods=['PUT'])
+@jwt_required()
+def edit_election_route(election_id):
+    u = _get_current_user()
+    if not u or u[4] != 'admin':
+        return jsonify({'error': 'Admin access required'}), 403
+
+    e = get_election(election_id)
+    if not e:
+        return jsonify({'error': 'Election not found'}), 404
+
+    data = request.json or {}
+    name             = data.get('name', '').strip()
+    candidates       = data.get('candidates', [])
+    candidate_photos = data.get('candidate_photos', [])
+    duration_minutes = data.get('duration_minutes', 0)
+
+    if not name or not isinstance(candidates, list) or len(candidates) < 2:
+        return jsonify({'error': 'Invalid election data'}), 400
+
+    candidates_with_photos = [
+        {'name': c, 'photo': candidate_photos[i] if i < len(candidate_photos) else ''}
+        for i, c in enumerate(candidates)
+    ]
+
+    end_time = None
+    if duration_minutes and duration_minutes > 0:
+        now_utc = datetime.utcnow()
+        now_ist = now_utc + IST_OFFSET
+        end_ist = now_ist + timedelta(minutes=duration_minutes)
+        end_time = end_ist.isoformat()
+
+    conn = __import__('models').get_conn()
+    c = conn.cursor()
+    c.execute(
+        "UPDATE elections SET name=?, candidates_json=?, end_time=? WHERE id=?",
+        (name, json.dumps(candidates_with_photos), end_time, election_id)
+    )
+    conn.commit()
+    conn.close()
+
+    return jsonify({'message': 'Election updated successfully'}), 200
 @jwt_required()
 def get_election_shares(election_id):
     u = _get_current_user()

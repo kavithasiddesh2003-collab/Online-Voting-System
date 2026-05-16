@@ -6,27 +6,20 @@ const COLORS = ['#6CA2FF', '#3EB489', '#FFA726', '#FF6B6B', '#A78BFA', '#34D399'
 
 function LiveResults({ electionId, token }) {
   const [data, setData] = useState(null);
-
   useEffect(() => {
     fetchLive();
     const interval = setInterval(fetchLive, 5000);
     return () => clearInterval(interval);
   }, [electionId]);
-
   const fetchLive = async () => {
     try {
-      const res = await api.get(`/admin/live-count/${electionId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await api.get(`/admin/live-count/${electionId}`, { headers: { Authorization: `Bearer ${token}` } });
       setData(res.data);
     } catch {}
   };
-
   if (!data) return <div style={{ color: '#8899AA', fontSize: '0.85rem', padding: '0.5rem' }}>Loading...</div>;
-
   const total = data.total_votes;
   const entries = Object.entries(data.counts).sort((a, b) => b[1] - a[1]);
-
   return (
     <div style={liveStyles.box}>
       <div style={liveStyles.header}>
@@ -66,31 +59,24 @@ const liveStyles = {
 function VoterStatus({ electionId, token }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-
   useEffect(() => {
     fetchStatus();
     const interval = setInterval(fetchStatus, 10000);
     return () => clearInterval(interval);
   }, [electionId]);
-
   const fetchStatus = async () => {
     try {
-      const res = await api.get(`/admin/voter-status/${electionId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await api.get(`/admin/voter-status/${electionId}`, { headers: { Authorization: `Bearer ${token}` } });
       setData(res.data);
     } catch {}
     finally { setLoading(false); }
   };
-
   if (loading) return <div style={{ color: '#8899AA', padding: '0.5rem' }}>Loading voter list...</div>;
   if (!data) return null;
-
   return (
     <div style={vsStyles.box}>
       <div style={vsStyles.header}>
-        👥 Voter Status —
-        <span style={{ color: '#8CFAC7' }}> {data.total_voted}</span>
+        👥 Voter Status — <span style={{ color: '#8CFAC7' }}>{data.total_voted}</span>
         <span style={{ color: '#8899AA' }}> / {data.total_voters} voted</span>
         <span style={{ fontSize: '0.72rem', color: '#8899AA', marginLeft: '0.5rem' }}>(refreshes every 10s)</span>
       </div>
@@ -111,9 +97,7 @@ function VoterStatus({ electionId, token }) {
                 <td style={vsStyles.td}>{v.phone || '—'}</td>
                 <td style={vsStyles.td}>{v.voter_id || '—'}</td>
                 <td style={vsStyles.td}>
-                  {v.voted
-                    ? <span style={vsStyles.voted}>✅ Voted</span>
-                    : <span style={vsStyles.notVoted}>⏳ Not yet</span>}
+                  {v.voted ? <span style={vsStyles.voted}>✅ Voted</span> : <span style={vsStyles.notVoted}>⏳ Not yet</span>}
                 </td>
               </tr>
             ))}
@@ -135,15 +119,232 @@ const vsStyles = {
   notVoted: { background: '#2A2000', color: '#FFA726', border: '1px solid #7A5200', padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 700 }
 };
 
+function CreateElectionModal({ token, onClose, onCreated }) {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [rows, setRows] = useState([{ name: '', photo: '' }, { name: '', photo: '' }]);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const addRow = () => setRows([...rows, { name: '', photo: '' }]);
+  const removeRow = (idx) => rows.length > 2 && setRows(rows.filter((_, i) => i !== idx));
+  const updateRow = (idx, field, value) => {
+    const updated = [...rows];
+    updated[idx][field] = value;
+    setRows(updated);
+  };
+
+  const getDurationMinutes = () => {
+    if (!startDate || !endDate) return 0;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const diff = Math.round((end - start) / 60000);
+    return diff > 0 ? diff : 0;
+  };
+
+  const handleCreate = async () => {
+    const validRows = rows.filter(r => r.name.trim());
+    if (!title.trim()) { setError('Enter election title.'); return; }
+    if (validRows.length < 2) { setError('Add at least 2 candidates.'); return; }
+    setSaving(true); setError('');
+    try {
+      await api.post('/admin/election', {
+        name: title.trim(),
+        description: description.trim(),
+        candidates: validRows.map(r => r.name.trim()),
+        candidate_photos: validRows.map(r => r.photo.trim()),
+        duration_minutes: getDurationMinutes()
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      onCreated();
+      onClose();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to create election');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div style={cm.overlay}>
+      <div style={cm.box}>
+        <div style={cm.titleRow}>
+          <span style={cm.titleIcon}>+</span>
+          <h3 style={cm.title}>Create New Election</h3>
+        </div>
+
+        <label style={cm.label}>ELECTION TITLE</label>
+        <input style={cm.input} type="text" placeholder="e.g. Student Council Election 2026"
+          value={title} onChange={e => setTitle(e.target.value)} />
+
+        <label style={cm.label}>DESCRIPTION</label>
+        <textarea style={cm.textarea} placeholder="Describe the election..."
+          value={description} onChange={e => setDescription(e.target.value)} rows={3} />
+
+        <div style={cm.dateRow}>
+          <div style={{ flex: 1 }}>
+            <label style={cm.label}>START DATE</label>
+            <input style={cm.input} type="datetime-local"
+              value={startDate} onChange={e => setStartDate(e.target.value)} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={cm.label}>END DATE</label>
+            <input style={cm.input} type="datetime-local"
+              value={endDate} onChange={e => setEndDate(e.target.value)} />
+          </div>
+        </div>
+
+        <label style={cm.label}>CANDIDATES</label>
+        {rows.map((row, idx) => (
+          <div key={idx} style={cm.candidateRow}>
+            <div style={cm.photoBox}>
+              {row.photo
+                ? <img src={row.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} />
+                : <span style={{ fontSize: '1.4rem', color: '#8899AA' }}>👤</span>}
+            </div>
+            <input style={{ ...cm.input, flex: 1, marginBottom: 0 }} type="text" placeholder="Name"
+              value={row.name} onChange={e => updateRow(idx, 'name', e.target.value)} />
+            <input style={{ ...cm.input, flex: 1, marginBottom: 0, fontSize: '0.85rem', color: '#8899AA' }}
+              type="text" placeholder="Photo URL (optional)"
+              value={row.photo} onChange={e => updateRow(idx, 'photo', e.target.value)} />
+            {rows.length > 2 && (
+              <button onClick={() => removeRow(idx)} style={cm.removeBtn}>✕</button>
+            )}
+          </div>
+        ))}
+
+        <button onClick={addRow} style={cm.addCandidateBtn}>+ Add Candidate</button>
+
+        {error && <div style={{ color: '#FF6B6B', fontSize: '0.85rem', margin: '0.5rem 0' }}>{error}</div>}
+
+        <div style={cm.btnRow}>
+          <button onClick={onClose} style={cm.cancelBtn}>Cancel</button>
+          <button onClick={handleCreate} disabled={saving} style={cm.createBtn}>
+            {saving ? 'Creating...' : 'Create Election'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const cm = {
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' },
+  box: { background: '#13111e', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '2rem', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto' },
+  titleRow: { display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' },
+  titleIcon: { fontSize: '1.4rem', color: '#7B61FF', fontWeight: 900 },
+  title: { margin: 0, color: '#7B61FF', fontSize: '1.2rem', fontWeight: 700 },
+  label: { display: 'block', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.1em', color: '#8899AA', marginBottom: '0.4rem', marginTop: '0.8rem' },
+  input: { width: '100%', padding: '0.8rem 1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: '#1a1828', color: '#E6EEF8', fontSize: '0.95rem', boxSizing: 'border-box', outline: 'none', marginBottom: '0.5rem' },
+  textarea: { width: '100%', padding: '0.8rem 1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: '#1a1828', color: '#E6EEF8', fontSize: '0.95rem', boxSizing: 'border-box', outline: 'none', resize: 'vertical', fontFamily: 'inherit', marginBottom: '0.5rem' },
+  dateRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' },
+  candidateRow: { display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.6rem' },
+  photoBox: { width: '44px', height: '44px', borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a1828' },
+  removeBtn: { background: 'none', border: 'none', color: '#FF6B6B', cursor: 'pointer', fontSize: '1rem', padding: '0.3rem' },
+  addCandidateBtn: { background: 'none', border: 'none', color: '#7B61FF', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 600, padding: '0.3rem 0', marginTop: '0.3rem' },
+  btnRow: { display: 'flex', gap: '1rem', marginTop: '1.5rem' },
+  cancelBtn: { flex: 1, padding: '0.9rem', background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: '#8899AA', borderRadius: '10px', cursor: 'pointer', fontWeight: 600, fontSize: '0.95rem' },
+  createBtn: { flex: 1, padding: '0.9rem', background: 'linear-gradient(135deg, #7B61FF, #6848ff)', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', boxShadow: '0 4px 16px rgba(123,97,255,0.4)' }
+};
+
+function EditModal({ election, token, onClose, onSaved }) {
+  const [name, setName] = useState(election.name);
+  const [duration, setDuration] = useState('');
+  const [rows, setRows] = useState(
+    election.candidates.map((c, i) => ({
+      name: c,
+      photo: (election.candidate_photos && election.candidate_photos[i]) || ''
+    }))
+  );
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const updateRow = (idx, field, value) => {
+    const updated = [...rows];
+    updated[idx][field] = value;
+    setRows(updated);
+  };
+  const addRow = () => setRows([...rows, { name: '', photo: '' }]);
+  const removeRow = (idx) => rows.length > 2 && setRows(rows.filter((_, i) => i !== idx));
+
+  const save = async () => {
+    const validRows = rows.filter(r => r.name.trim());
+    if (!name.trim() || validRows.length < 2) { setError('Need election name and at least 2 candidates.'); return; }
+    setSaving(true); setError('');
+    try {
+      await api.put(`/admin/election/${election.id}`, {
+        name: name.trim(),
+        candidates: validRows.map(r => r.name.trim()),
+        candidate_photos: validRows.map(r => r.photo.trim()),
+        duration_minutes: duration ? parseInt(duration) : 0
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      onSaved(); onClose();
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to save');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div style={modal.overlay}>
+      <div style={modal.box}>
+        <div style={modal.header}>
+          <h3 style={{ margin: 0, color: '#E6EEF8' }}>✏️ Edit Election</h3>
+          <button onClick={onClose} style={modal.closeBtn}>✕</button>
+        </div>
+        <input style={modal.input} type="text" placeholder="Election name" value={name} onChange={e => setName(e.target.value)} />
+        <input style={modal.input} type="number" placeholder="New duration (minutes, 0=no limit)" value={duration} onChange={e => setDuration(e.target.value)} />
+        <div style={{ marginBottom: '0.8rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+            <span style={{ color: '#E6EEF8', fontWeight: 700 }}>Candidates</span>
+            <button onClick={addRow} style={modal.addBtn}>+ Add</button>
+          </div>
+          {rows.map((row, idx) => (
+            <div key={idx} style={modal.candidateRow}>
+              <div style={modal.photoPreview}>
+                {row.photo
+                  ? <img src={row.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} />
+                  : <span style={{ fontSize: '1.2rem' }}>👤</span>}
+              </div>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                <input style={modal.smallInput} type="text" placeholder="Candidate name" value={row.name} onChange={e => updateRow(idx, 'name', e.target.value)} />
+                <input style={{ ...modal.smallInput, color: '#8899AA' }} type="text" placeholder="Photo URL (optional)" value={row.photo} onChange={e => updateRow(idx, 'photo', e.target.value)} />
+              </div>
+              {rows.length > 2 && <button onClick={() => removeRow(idx)} style={modal.removeBtn}>✕</button>}
+            </div>
+          ))}
+        </div>
+        {error && <div style={{ color: '#FF6B6B', fontSize: '0.85rem', marginBottom: '0.5rem' }}>{error}</div>}
+        <div style={{ display: 'flex', gap: '0.8rem' }}>
+          <button onClick={save} disabled={saving} style={modal.saveBtn}>{saving ? 'Saving...' : '💾 Save Changes'}</button>
+          <button onClick={onClose} style={modal.cancelBtn}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const modal = {
+  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' },
+  box: { background: '#0F1725', border: '1px solid #263250', borderRadius: '16px', padding: '1.5rem', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' },
+  closeBtn: { background: 'none', border: 'none', color: '#8899AA', fontSize: '1.2rem', cursor: 'pointer' },
+  input: { width: '100%', padding: '0.8rem', marginBottom: '0.8rem', borderRadius: '10px', border: '1px solid #2C3958', background: '#162033', color: '#E6EEF8', boxSizing: 'border-box' },
+  candidateRow: { display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem', background: '#162033', border: '1px solid #2C3958', borderRadius: '10px', padding: '0.5rem' },
+  photoPreview: { width: '48px', height: '48px', borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '2px solid #2C3958', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0F1725' },
+  smallInput: { width: '100%', padding: '0.5rem 0.7rem', borderRadius: '8px', border: '1px solid #2C3958', background: '#0F1725', color: '#E6EEF8', boxSizing: 'border-box', fontSize: '0.9rem' },
+  addBtn: { padding: '0.3rem 0.7rem', background: '#1B2537', color: '#6CA2FF', border: '1px solid #6CA2FF44', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.82rem' },
+  removeBtn: { background: 'none', border: 'none', color: '#FF6B6B', cursor: 'pointer' },
+  saveBtn: { flex: 1, padding: '0.85rem', background: '#6CA2FF', color: '#0B101A', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 700 },
+  cancelBtn: { padding: '0.85rem 1.2rem', background: '#1B2537', color: '#E6EEF8', border: '1px solid #2C3958', borderRadius: '10px', cursor: 'pointer', fontWeight: 700 }
+};
+
 function AdminPanel({ token }) {
-  const [electionName, setElectionName] = useState('');
-  const [durationMinutes, setDurationMinutes] = useState('');
+  const [elections, setElections] = useState([]);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [elections, setElections] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
   const [voterStatusId, setVoterStatusId] = useState(null);
-  const [candidateRows, setCandidateRows] = useState([{ name: '', photo: '' }, { name: '', photo: '' }]);
+  const [editingElection, setEditingElection] = useState(null);
+  const [showCreate, setShowCreate] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -159,39 +360,6 @@ function AdminPanel({ token }) {
     } catch {}
   };
 
-  const addCandidateRow = () => setCandidateRows([...candidateRows, { name: '', photo: '' }]);
-  const removeCandidateRow = (idx) => setCandidateRows(candidateRows.filter((_, i) => i !== idx));
-  const updateCandidate = (idx, field, value) => {
-    const updated = [...candidateRows];
-    updated[idx][field] = value;
-    setCandidateRows(updated);
-  };
-
-  const createElection = async () => {
-    setError(''); setMessage('');
-    const validCandidates = candidateRows.filter(c => c.name.trim());
-    if (!electionName.trim() || validCandidates.length < 2) {
-      setError('Enter election name and at least 2 candidates');
-      return;
-    }
-    try {
-      const duration = durationMinutes ? parseInt(durationMinutes, 10) : 0;
-      const candidateNames = validCandidates.map(c => c.name.trim());
-      const candidatePhotos = validCandidates.map(c => c.photo.trim());
-      const res = await api.post('/admin/election',
-        { name: electionName, candidates: candidateNames, candidate_photos: candidatePhotos, duration_minutes: duration },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setMessage(`Election created (ID: ${res.data.election_id}).`);
-      fetchElections();
-      setElectionName('');
-      setDurationMinutes('');
-      setCandidateRows([{ name: '', photo: '' }, { name: '', photo: '' }]);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to create election');
-    }
-  };
-
   const deleteElection = async (electionId) => {
     if (!window.confirm(`Delete election ${electionId}? This cannot be undone.`)) return;
     setError(''); setMessage('');
@@ -201,16 +369,6 @@ function AdminPanel({ token }) {
       fetchElections();
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to delete election');
-    }
-  };
-
-  const viewShares = async (electionId) => {
-    try {
-      const res = await api.get(`/admin/election/${electionId}/shares`, { headers: { Authorization: `Bearer ${token}` } });
-      const sharesFormatted = res.data.shares.map((s, i) => `Trustee ${i+1}: ${JSON.stringify(s)}`).join('\n');
-      alert(`Trustee Shares for Election ${electionId}:\n\n${sharesFormatted}`);
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to retrieve shares');
     }
   };
 
@@ -231,51 +389,34 @@ function AdminPanel({ token }) {
 
   return (
     <div style={styles.container}>
-      <h2>Admin Panel</h2>
+      {showCreate && (
+        <CreateElectionModal
+          token={token}
+          onClose={() => setShowCreate(false)}
+          onCreated={() => { fetchElections(); setMessage('Election created successfully!'); }}
+        />
+      )}
+      {editingElection && (
+        <EditModal
+          election={editingElection}
+          token={token}
+          onClose={() => setEditingElection(null)}
+          onSaved={() => { fetchElections(); setMessage('Election updated successfully!'); }}
+        />
+      )}
 
-      {/* Create Election */}
-      <div style={styles.section}>
-        <h3>Create New Election</h3>
-        <input type="text" placeholder="Election name" value={electionName}
-          onChange={e => setElectionName(e.target.value)} style={styles.input} />
-        <input type="number" placeholder="Voting duration (minutes, 0=no limit)" value={durationMinutes}
-          onChange={e => setDurationMinutes(e.target.value)} style={styles.input} />
-
-        <div style={{ marginBottom: '0.8rem' }}>
-          <div style={styles.candidateHeader}>
-            <span style={{ fontWeight: 700, color: '#E6EEF8' }}>Candidates</span>
-            <button onClick={addCandidateRow} style={styles.buttonAdd}>+ Add Candidate</button>
-          </div>
-          {candidateRows.map((row, idx) => (
-            <div key={idx} style={styles.candidateRow}>
-              <div style={styles.candidatePhotoPreview}>
-                {row.photo
-                  ? <img src={row.photo} alt="" style={styles.previewImg} onError={e => { e.target.style.display = 'none'; }} />
-                  : <div style={styles.previewPlaceholder}>👤</div>
-                }
-              </div>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                <input type="text" placeholder={`Candidate ${idx + 1} name`}
-                  value={row.name} onChange={e => updateCandidate(idx, 'name', e.target.value)}
-                  style={styles.candidateInput} />
-                <input type="text" placeholder="Photo URL (optional)"
-                  value={row.photo} onChange={e => updateCandidate(idx, 'photo', e.target.value)}
-                  style={{ ...styles.candidateInput, fontSize: '0.82rem', color: '#8899AA' }} />
-              </div>
-              {candidateRows.length > 2 && (
-                <button onClick={() => removeCandidateRow(idx)} style={styles.buttonRemove}>✕</button>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <button onClick={createElection} style={styles.buttonPrimary}>Create Election</button>
+      <div style={styles.topBar}>
+        <h2 style={{ margin: 0 }}>Admin Panel</h2>
+        <button onClick={() => setShowCreate(true)} style={styles.createBtn}>+ Create Election</button>
       </div>
 
-      {/* Manage Elections */}
       <div style={styles.section}>
         <h3>Manage Elections</h3>
-        {elections.length === 0 && <p>No elections yet.</p>}
+        {elections.length === 0 && (
+          <div style={styles.emptyState}>
+            <p style={{ color: '#8899AA', margin: 0 }}>No elections yet. Click "+ Create Election" to get started.</p>
+          </div>
+        )}
         {elections.map(e => (
           <div key={e.id} style={styles.electionCard}>
             <div style={{ flex: 1 }}>
@@ -287,9 +428,7 @@ function AdminPanel({ token }) {
                     background: e.status === 'active' ? '#1B3A2F' : '#2A2000',
                     color: e.status === 'active' ? '#8CFAC7' : '#FFA726',
                     border: `1px solid ${e.status === 'active' ? '#2E6B50' : '#7A5200'}`
-                  }}>
-                    {e.status.toUpperCase()}
-                  </span>
+                  }}>{e.status.toUpperCase()}</span>
                 </div>
                 <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                   <button onClick={() => toggleExpand(e.id)} style={styles.buttonLive}>
@@ -298,18 +437,19 @@ function AdminPanel({ token }) {
                   <button onClick={() => toggleVoterStatus(e.id)} style={styles.buttonVoters}>
                     {voterStatusId === e.id ? '▲ Hide Voters' : '👥 Who Voted'}
                   </button>
+                  {e.status === 'active' && (
+                    <button onClick={() => setEditingElection(e)} style={styles.buttonEdit}>✏️ Edit</button>
+                  )}
                   {e.status === 'active' && isVotingEnded(e) && (
                     <button onClick={() => autoTally(e.id)} style={styles.buttonSuccess}>Tally</button>
                   )}
                   {e.status === 'tallied' && (
                     <button onClick={() => navigate(`/results/${e.id}`)} style={styles.buttonInfo}>View Results</button>
                   )}
-                  <button onClick={() => viewShares(e.id)} style={styles.buttonSecondary}>Shares</button>
                   <button onClick={() => deleteElection(e.id)} style={styles.buttonDanger}>Delete</button>
                 </div>
               </div>
 
-              {/* Candidate chips with photos */}
               <div style={{ display: 'flex', gap: '0.6rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
                 {e.candidates.map((c, i) => {
                   const photo = e.candidate_photos && e.candidate_photos[i];
@@ -317,8 +457,7 @@ function AdminPanel({ token }) {
                     <div key={i} style={styles.candidateChipWithPhoto}>
                       {photo
                         ? <img src={photo} alt={c} style={styles.chipPhoto} onError={ev => { ev.target.style.display = 'none'; }} />
-                        : <div style={styles.chipPhotoPlaceholder}>👤</div>
-                      }
+                        : <div style={styles.chipPhotoPlaceholder}>👤</div>}
                       <span style={{ fontSize: '0.78rem', color: '#A0B4D0' }}>{c}</span>
                     </div>
                   );
@@ -346,29 +485,22 @@ function AdminPanel({ token }) {
 
 const styles = {
   container: { background: '#0F1725', color: '#E6EEF8', padding: '2rem', borderRadius: '12px', maxWidth: '960px', margin: '0 auto', boxShadow: '0 8px 24px rgba(0,0,0,0.35)' },
-  section: { marginBottom: '1.6rem', background: '#162033', border: '1px solid #263250', borderRadius: '12px', padding: '1.2rem' },
-  input: { width: '100%', padding: '0.9rem', marginBottom: '0.9rem', borderRadius: '10px', border: '1px solid #2C3958', background: '#0F1725', color: '#E6EEF8', boxSizing: 'border-box' },
-  candidateHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' },
-  candidateRow: { display: 'flex', alignItems: 'center', gap: '0.8rem', marginBottom: '0.6rem', background: '#0F1725', border: '1px solid #2C3958', borderRadius: '10px', padding: '0.6rem' },
-  candidatePhotoPreview: { width: '56px', height: '56px', borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '2px solid #2C3958', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#162033' },
-  previewImg: { width: '100%', height: '100%', objectFit: 'cover' },
-  previewPlaceholder: { fontSize: '1.5rem' },
-  candidateInput: { width: '100%', padding: '0.6rem 0.8rem', borderRadius: '8px', border: '1px solid #2C3958', background: '#162033', color: '#E6EEF8', boxSizing: 'border-box' },
+  topBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' },
+  createBtn: { padding: '0.8rem 1.5rem', background: 'linear-gradient(135deg, #7B61FF, #6848ff)', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', boxShadow: '0 4px 16px rgba(123,97,255,0.4)' },
+  section: { background: '#162033', border: '1px solid #263250', borderRadius: '12px', padding: '1.2rem' },
+  emptyState: { background: '#0F1725', border: '1px dashed #2C3958', borderRadius: '10px', padding: '2rem', textAlign: 'center' },
   electionCard: { display: 'flex', padding: '0.9rem', background: '#0F1725', border: '1px solid #2C3958', borderRadius: '8px', marginBottom: '0.6rem' },
   electionRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' },
   statusBadge: { padding: '0.15rem 0.6rem', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 700 },
   candidateChipWithPhoto: { display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#162033', border: '1px solid #2C3958', borderRadius: '999px', padding: '0.2rem 0.7rem 0.2rem 0.2rem' },
   chipPhoto: { width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' },
   chipPhotoPlaceholder: { width: '24px', height: '24px', borderRadius: '50%', background: '#1E2B44', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem' },
-  buttonPrimary: { padding: '0.9rem 1.2rem', background: '#6CA2FF', color: '#0B101A', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 700 },
-  buttonAdd: { padding: '0.4rem 0.9rem', background: '#1B2537', color: '#6CA2FF', border: '1px solid #6CA2FF44', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' },
-  buttonRemove: { padding: '0.4rem 0.6rem', background: '#2A1A1A', color: '#FF6B6B', border: '1px solid #FF6B6B44', borderRadius: '8px', cursor: 'pointer', fontWeight: 700 },
-  buttonSecondary: { padding: '0.6rem 0.9rem', background: '#1B2537', color: '#E6EEF8', border: '1px solid #2C3958', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' },
+  buttonLive: { padding: '0.6rem 0.9rem', background: '#1B2B44', color: '#6CA2FF', border: '1px solid #6CA2FF44', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' },
+  buttonVoters: { padding: '0.6rem 0.9rem', background: '#1B3A2F', color: '#8CFAC7', border: '1px solid #2E6B5044', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' },
+  buttonEdit: { padding: '0.6rem 0.9rem', background: '#2A1F00', color: '#FFA726', border: '1px solid #FFA72644', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' },
   buttonDanger: { padding: '0.6rem 0.9rem', background: '#FF6B6B', color: '#0B101A', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' },
   buttonSuccess: { padding: '0.6rem 0.9rem', background: '#3EB489', color: '#0B101A', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' },
   buttonInfo: { padding: '0.6rem 0.9rem', background: '#FFA726', color: '#0B101A', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' },
-  buttonLive: { padding: '0.6rem 0.9rem', background: '#1B2B44', color: '#6CA2FF', border: '1px solid #6CA2FF44', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' },
-  buttonVoters: { padding: '0.6rem 0.9rem', background: '#1B3A2F', color: '#8CFAC7', border: '1px solid #2E6B5044', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' },
   success: { color: '#8CFAC7', marginTop: '0.6rem' },
   error: { color: '#FF8686', marginTop: '0.6rem' },
 };
