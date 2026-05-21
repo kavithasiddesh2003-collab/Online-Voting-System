@@ -136,22 +136,13 @@ function CreateElectionModal({ token, onClose, onCreated }) {
     setRows(updated);
   };
 
-  const getDurationMinutes = () => {
-    if (!startDate || !endDate) return 0;
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const diff = Math.round((end - start) / 60000);
-    return diff > 0 ? diff : 0;
-  };
-
-  // DELETE getDurationMinutes entirely — not needed anymore
-
-const handleCreate = async () => {
+  const handleCreate = async () => {
     const validRows = rows.filter(r => r.name.trim());
     if (!title.trim()) { setError('Enter election title.'); return; }
     if (validRows.length < 2) { setError('Add at least 2 candidates.'); return; }
-    if (!endDate) { setError('Please select an end date/time.'); return; }
-    if (new Date(endDate) <= new Date()) { setError('End date must be in the future.'); return; }
+    if (endDate && startDate && new Date(endDate) <= new Date(startDate)) {
+      setError('End date must be after start date.'); return;
+    }
     setSaving(true); setError('');
     try {
       await api.post('/admin/election', {
@@ -159,7 +150,7 @@ const handleCreate = async () => {
         description: description.trim(),
         candidates: validRows.map(r => r.name.trim()),
         candidate_photos: validRows.map(r => r.photo.trim()),
-        end_time: new Date(endDate).toISOString()
+        end_time: endDate ? new Date(endDate).toISOString() : null
       }, { headers: { Authorization: `Bearer ${token}` } });
       onCreated();
       onClose();
@@ -167,6 +158,7 @@ const handleCreate = async () => {
       setError(err.response?.data?.error || 'Failed to create election');
     } finally { setSaving(false); }
   };
+
   return (
     <div style={cm.overlay}>
       <div style={cm.box}>
@@ -176,11 +168,11 @@ const handleCreate = async () => {
         </div>
 
         <label style={cm.label}>ELECTION TITLE</label>
-        <input style={cm.input} type="text" placeholder=""
+        <input style={cm.input} type="text" placeholder="e.g. Student Council Election 2026"
           value={title} onChange={e => setTitle(e.target.value)} />
 
         <label style={cm.label}>DESCRIPTION</label>
-        <textarea style={cm.textarea} placeholder=""
+        <textarea style={cm.textarea} placeholder="Describe the election..."
           value={description} onChange={e => setDescription(e.target.value)} rows={3} />
 
         <div style={cm.dateRow}>
@@ -207,7 +199,7 @@ const handleCreate = async () => {
             <input style={{ ...cm.input, flex: 1, marginBottom: 0 }} type="text" placeholder="Name"
               value={row.name} onChange={e => updateRow(idx, 'name', e.target.value)} />
             <input style={{ ...cm.input, flex: 1, marginBottom: 0, fontSize: '0.85rem', color: '#8899AA' }}
-              type="text" placeholder="Photo URL "
+              type="text" placeholder="Photo URL (optional)"
               value={row.photo} onChange={e => updateRow(idx, 'photo', e.target.value)} />
             {rows.length > 2 && (
               <button onClick={() => removeRow(idx)} style={cm.removeBtn}>✕</button>
@@ -251,8 +243,7 @@ const cm = {
 
 function EditModal({ election, token, onClose, onSaved }) {
   const [name, setName] = useState(election.name);
-  const [startDate, setStartDate] = useState(election.start_time ? election.start_time.slice(0,16) : '');
-  const [endDate, setEndDate] = useState(election.end_time ? election.end_time.slice(0,16) : '');
+  const [duration, setDuration] = useState('');
   const [rows, setRows] = useState(
     election.candidates.map((c, i) => ({
       name: c,
@@ -270,12 +261,6 @@ function EditModal({ election, token, onClose, onSaved }) {
   const addRow = () => setRows([...rows, { name: '', photo: '' }]);
   const removeRow = (idx) => rows.length > 2 && setRows(rows.filter((_, i) => i !== idx));
 
-  const getDurationMinutes = () => {
-    if (!startDate || !endDate) return 0;
-    const diff = Math.round((new Date(endDate) - new Date(startDate)) / 60000);
-    return diff > 0 ? diff : 0;
-  };
-
   const save = async () => {
     const validRows = rows.filter(r => r.name.trim());
     if (!name.trim() || validRows.length < 2) { setError('Need election name and at least 2 candidates.'); return; }
@@ -285,9 +270,7 @@ function EditModal({ election, token, onClose, onSaved }) {
         name: name.trim(),
         candidates: validRows.map(r => r.name.trim()),
         candidate_photos: validRows.map(r => r.photo.trim()),
-        duration_minutes: getDurationMinutes(),
-        start_date: startDate,
-        end_date: endDate
+        duration_minutes: duration ? parseInt(duration) : 0
       }, { headers: { Authorization: `Bearer ${token}` } });
       onSaved(); onClose();
     } catch (err) {
@@ -302,21 +285,8 @@ function EditModal({ election, token, onClose, onSaved }) {
           <h3 style={{ margin: 0, color: '#E6EEF8' }}>✏️ Edit Election</h3>
           <button onClick={onClose} style={modal.closeBtn}>✕</button>
         </div>
-
-        <label style={modal.label}>ELECTION NAME</label>
         <input style={modal.input} type="text" placeholder="Election name" value={name} onChange={e => setName(e.target.value)} />
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', marginBottom: '0.8rem' }}>
-          <div>
-            <label style={modal.label}>START DATE</label>
-            <input style={modal.input} type="datetime-local" value={startDate} onChange={e => setStartDate(e.target.value)} />
-          </div>
-          <div>
-            <label style={modal.label}>END DATE</label>
-            <input style={modal.input} type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} />
-          </div>
-        </div>
-
+        <input style={modal.input} type="number" placeholder="New duration (minutes, 0=no limit)" value={duration} onChange={e => setDuration(e.target.value)} />
         <div style={{ marginBottom: '0.8rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
             <span style={{ color: '#E6EEF8', fontWeight: 700 }}>Candidates</span>
@@ -352,7 +322,6 @@ const modal = {
   box: { background: '#0F1725', border: '1px solid #263250', borderRadius: '16px', padding: '1.5rem', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' },
   closeBtn: { background: 'none', border: 'none', color: '#8899AA', fontSize: '1.2rem', cursor: 'pointer' },
-  label: { display: 'block', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.1em', color: '#8899AA', marginBottom: '0.4rem' },
   input: { width: '100%', padding: '0.8rem', marginBottom: '0.8rem', borderRadius: '10px', border: '1px solid #2C3958', background: '#162033', color: '#E6EEF8', boxSizing: 'border-box' },
   candidateRow: { display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem', background: '#162033', border: '1px solid #2C3958', borderRadius: '10px', padding: '0.5rem' },
   photoPreview: { width: '48px', height: '48px', borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '2px solid #2C3958', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0F1725' },
@@ -409,42 +378,7 @@ function AdminPanel({ token }) {
     }
   };
 
-  const cancelElection = async (electionId) => {
-    if (!window.confirm('Cancel this election? This cannot be undone.')) return;
-    setError(''); setMessage('');
-    try {
-      await api.put(`/admin/election/${electionId}`, {
-        name: elections.find(e => e.id === electionId)?.name || '',
-        candidates: elections.find(e => e.id === electionId)?.candidates || [],
-        candidate_photos: elections.find(e => e.id === electionId)?.candidate_photos || [],
-        duration_minutes: 0,
-        cancelled: true
-      }, { headers: { Authorization: `Bearer ${token}` } });
-      setMessage(`Election ${electionId} cancelled.`);
-      fetchElections();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to cancel election');
-    }
-  };
-
-  const getElectionStatus = (e) => {
-    if (e.status === 'tallied') return 'completed';
-    if (e.status === 'cancelled') return 'cancelled';
-    const now = new Date();
-    if (e.start_time && now < new Date(e.start_time)) return 'upcoming';
-    if (!e.end_time) return 'active';
-    const end = new Date(e.end_time);
-    if (now > end) return 'ended';
-    return 'active';
-  };
-
-  const statusConfig = {
-    active:    { label: 'Active',    color: '#8CFAC7', bg: '#1B3A2F', border: '#2E6B50' },
-    upcoming:  { label: 'Upcoming',  color: '#6CA2FF', bg: '#1B2537', border: '#2C3958' },
-    ended:     { label: 'Ended',     color: '#FFA726', bg: '#2A2000', border: '#7A5200' },
-    completed: { label: 'Completed', color: '#A78BFA', bg: '#1E1537', border: '#4C3080' },
-    cancelled: { label: 'Cancelled', color: '#FF6B6B', bg: '#2A1A1A', border: '#7A2020' },
-  };
+  const isVotingEnded = (e) => !e.end_time || new Date() > new Date(e.end_time);
   const toggleExpand = (id) => setExpandedId(expandedId === id ? null : id);
   const toggleVoterStatus = (id) => setVoterStatusId(voterStatusId === id ? null : id);
 
@@ -478,70 +412,64 @@ function AdminPanel({ token }) {
             <p style={{ color: '#8899AA', margin: 0 }}>No elections yet. Click "+ Create Election" to get started.</p>
           </div>
         )}
-        {elections.map(e => {
-          const isVotingEnded = !e.end_time || new Date() > new Date(e.end_time);
-          return (
-            <div key={e.id} style={styles.electionCard}>
-              <div style={{ flex: 1 }}>
-                {/* Title row */}
-                <div style={styles.electionRow}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <strong>ID: {e.id}</strong> — {e.name}
-                    <span style={{
-                      ...styles.statusBadge,
-                      background: e.status === 'active' ? '#1B3A2F' : '#2A2000',
-                      color: e.status === 'active' ? '#8CFAC7' : '#FFA726',
-                      border: `1px solid ${e.status === 'active' ? '#2E6B50' : '#7A5200'}`
-                    }}>{e.status.toUpperCase()}</span>
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <button onClick={() => toggleExpand(e.id)} style={styles.buttonLive}>
-                      {expandedId === e.id ? '▲ Hide' : '📊 Live Count'}
-                    </button>
-                    <button onClick={() => toggleVoterStatus(e.id)} style={styles.buttonVoters}>
-                      {voterStatusId === e.id ? '▲ Hide Voters' : '👥 Who Voted'}
-                    </button>
-                    {e.status === 'active' && (
-                      <button onClick={() => setEditingElection(e)} style={styles.buttonEdit}>✏️ Edit</button>
-                    )}
-                    {e.status === 'active' && isVotingEnded && (
-                      <button onClick={() => autoTally(e.id)} style={styles.buttonSuccess}>Tally</button>
-                    )}
-                    {e.status === 'tallied' && (
-                      <button onClick={() => navigate(`/results/${e.id}`)} style={styles.buttonInfo}>View Results</button>
-                    )}
-                    <button onClick={() => deleteElection(e.id)} style={styles.buttonDanger}>Delete</button>
-                  </div>
+        {elections.map(e => (
+          <div key={e.id} style={styles.electionCard}>
+            <div style={{ flex: 1 }}>
+              <div style={styles.electionRow}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <strong>ID: {e.id}</strong> — {e.name}
+                  <span style={{
+                    ...styles.statusBadge,
+                    background: e.status === 'active' ? '#1B3A2F' : '#2A2000',
+                    color: e.status === 'active' ? '#8CFAC7' : '#FFA726',
+                    border: `1px solid ${e.status === 'active' ? '#2E6B50' : '#7A5200'}`
+                  }}>{e.status.toUpperCase()}</span>
                 </div>
-
-                {/* Candidate chips */}
-                <div style={{ display: 'flex', gap: '0.6rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
-                  {e.candidates.map((c, i) => {
-                    const photo = e.candidate_photos && e.candidate_photos[i];
-                    return (
-                      <div key={i} style={styles.candidateChipWithPhoto}>
-                        {photo
-                          ? <img src={photo} alt={c} style={styles.chipPhoto} onError={ev => { ev.target.style.display = 'none'; }} />
-                          : <div style={styles.chipPhotoPlaceholder}>👤</div>}
-                        <span style={{ fontSize: '0.78rem', color: '#A0B4D0' }}>{c}</span>
-                      </div>
-                    );
-                  })}
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <button onClick={() => toggleExpand(e.id)} style={styles.buttonLive}>
+                    {expandedId === e.id ? '▲ Hide' : '📊 Live Count'}
+                  </button>
+                  <button onClick={() => toggleVoterStatus(e.id)} style={styles.buttonVoters}>
+                    {voterStatusId === e.id ? '▲ Hide Voters' : '👥 Who Voted'}
+                  </button>
+                  {e.status === 'active' && (
+                    <button onClick={() => setEditingElection(e)} style={styles.buttonEdit}>✏️ Edit</button>
+                  )}
+                  {e.status === 'active' && isVotingEnded(e) && (
+                    <button onClick={() => autoTally(e.id)} style={styles.buttonSuccess}>Tally</button>
+                  )}
+                  {e.status === 'tallied' && (
+                    <button onClick={() => navigate(`/results/${e.id}`)} style={styles.buttonInfo}>View Results</button>
+                  )}
+                  <button onClick={() => deleteElection(e.id)} style={styles.buttonDanger}>Delete</button>
                 </div>
-
-                {/* End time */}
-                {e.end_time && e.status === 'active' && (
-                  <div style={{ fontSize: '0.82rem', color: isVotingEnded ? '#8CFAC7' : '#FFA726', marginTop: '0.4rem' }}>
-                    {isVotingEnded ? '✅ Voting ended — ready to tally' : `⏰ Ends: ${new Date(e.end_time).toLocaleString()}`}
-                  </div>
-                )}
-
-                {expandedId === e.id && <LiveResults electionId={e.id} token={token} />}
-                {voterStatusId === e.id && <VoterStatus electionId={e.id} token={token} />}
               </div>
+
+              <div style={{ display: 'flex', gap: '0.6rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
+                {e.candidates.map((c, i) => {
+                  const photo = e.candidate_photos && e.candidate_photos[i];
+                  return (
+                    <div key={i} style={styles.candidateChipWithPhoto}>
+                      {photo
+                        ? <img src={photo} alt={c} style={styles.chipPhoto} onError={ev => { ev.target.style.display = 'none'; }} />
+                        : <div style={styles.chipPhotoPlaceholder}>👤</div>}
+                      <span style={{ fontSize: '0.78rem', color: '#A0B4D0' }}>{c}</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {e.end_time && e.status === 'active' && (
+                <div style={{ fontSize: '0.82rem', color: isVotingEnded(e) ? '#8CFAC7' : '#FFA726', marginTop: '0.4rem' }}>
+                  {isVotingEnded(e) ? '✅ Voting ended — ready to tally' : `⏰ Ends: ${new Date(e.end_time).toLocaleString()}`}
+                </div>
+              )}
+
+              {expandedId === e.id && <LiveResults electionId={e.id} token={token} />}
+              {voterStatusId === e.id && <VoterStatus electionId={e.id} token={token} />}
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
 
       {message && <p style={styles.success}>{message}</p>}

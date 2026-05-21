@@ -259,6 +259,9 @@ def create_new_election():
     name = data.get('name', '').strip()
     candidates = data.get('candidates', [])
     candidate_photos = data.get('candidate_photos', [])
+    end_time_raw = data.get('end_time', None)
+    # Legacy support: also accept duration_minutes
+    duration_minutes = data.get('duration_minutes', 0)
 
     if not name or not isinstance(candidates, list) or len(candidates) < 2:
         return jsonify({'error': 'Invalid election data'}), 400
@@ -274,14 +277,16 @@ def create_new_election():
     public_key_str = {'n': str(public_key['n']), 'g': str(public_key['g'])}
     shares = generate_trustee_shares(private_key, n_shares=3, threshold=2)
 
-    # Accept absolute end_time from frontend (ISO string)
-    # Falls back to duration_minutes for backward compatibility
     end_time = None
-    end_time_iso = data.get('end_time', '').strip()
-    duration_minutes = data.get('duration_minutes', 0)
-
-    if end_time_iso:
-        end_time = end_time_iso  # use directly — frontend sends correct ISO string
+    if end_time_raw:
+        # Use the end_time directly from frontend (ISO format, stored as-is)
+        try:
+            # Parse and re-serialize to normalize format
+            parsed = datetime.fromisoformat(end_time_raw.replace('Z', '+00:00'))
+            # Convert to IST for consistent storage
+            end_time = (parsed.replace(tzinfo=None) + IST_OFFSET).isoformat() if parsed.utcoffset() is not None else parsed.isoformat()
+        except Exception:
+            end_time = end_time_raw
     elif duration_minutes and duration_minutes > 0:
         now_utc = datetime.utcnow()
         now_ist = now_utc + IST_OFFSET
