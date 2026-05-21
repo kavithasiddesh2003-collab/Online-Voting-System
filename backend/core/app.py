@@ -259,7 +259,6 @@ def create_new_election():
     name = data.get('name', '').strip()
     candidates = data.get('candidates', [])
     candidate_photos = data.get('candidate_photos', [])
-    duration_minutes = data.get('duration_minutes', 0)
 
     if not name or not isinstance(candidates, list) or len(candidates) < 2:
         return jsonify({'error': 'Invalid election data'}), 400
@@ -275,8 +274,15 @@ def create_new_election():
     public_key_str = {'n': str(public_key['n']), 'g': str(public_key['g'])}
     shares = generate_trustee_shares(private_key, n_shares=3, threshold=2)
 
+    # Accept absolute end_time from frontend (ISO string)
+    # Falls back to duration_minutes for backward compatibility
     end_time = None
-    if duration_minutes and duration_minutes > 0:
+    end_time_iso = data.get('end_time', '').strip()
+    duration_minutes = data.get('duration_minutes', 0)
+
+    if end_time_iso:
+        end_time = end_time_iso  # use directly — frontend sends correct ISO string
+    elif duration_minutes and duration_minutes > 0:
         now_utc = datetime.utcnow()
         now_ist = now_utc + IST_OFFSET
         end_ist = now_ist + timedelta(minutes=duration_minutes)

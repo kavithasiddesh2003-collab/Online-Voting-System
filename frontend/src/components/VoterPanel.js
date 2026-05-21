@@ -83,22 +83,28 @@ function VoterPanel({ token, user }) {
 
       {/* Stats Row */}
       <div style={styles.statsRow}>
-        <div style={styles.statCard}>
+        <div style={{ ...styles.statCard, cursor: 'pointer' }}
+          onClick={() => document.getElementById('active-section')?.scrollIntoView({ behavior: 'smooth' })}>
           <span style={{ ...styles.statNumber, color: '#6CA2FF' }}>{activeElections.length}</span>
           <span style={styles.statLabel}>Active Elections</span>
+          <span style={styles.statHint}>↓ View</span>
         </div>
-        <div style={styles.statCard}>
+        <div style={{ ...styles.statCard, cursor: 'pointer' }}
+          onClick={() => document.getElementById('voted-section')?.scrollIntoView({ behavior: 'smooth' })}>
           <span style={{ ...styles.statNumber, color: '#8CFAC7' }}>{votedIds.length}</span>
           <span style={styles.statLabel}>Votes Cast</span>
+          <span style={styles.statHint}>↓ View</span>
         </div>
-        <div style={styles.statCard}>
+        <div style={{ ...styles.statCard, cursor: 'pointer' }}
+          onClick={() => document.getElementById('results-section')?.scrollIntoView({ behavior: 'smooth' })}>
           <span style={{ ...styles.statNumber, color: '#FFA726' }}>{talliedElections.length}</span>
           <span style={styles.statLabel}>Results Available</span>
+          <span style={styles.statHint}>↓ View</span>
         </div>
       </div>
 
       {/* Active Elections */}
-      <section style={styles.section}>
+      <section id="active-section" style={styles.section}>
         <h2 style={styles.sectionTitle}>
           <span style={{ ...styles.dot, background: '#8CFAC7' }} /> Active Elections
         </h2>
@@ -137,9 +143,35 @@ function VoterPanel({ token, user }) {
         )}
       </section>
 
+      {/* Votes Cast */}
+      <section id="voted-section" style={styles.section}>
+        <h2 style={styles.sectionTitle}>
+          <span style={{ ...styles.dot, background: '#8CFAC7' }} /> Votes Cast
+        </h2>
+        {votedIds.length === 0 ? (
+          <div style={styles.emptyCard}>You have not voted in any election yet.</div>
+        ) : (
+          elections.filter(e => votedIds.includes(e.id)).map(e => (
+            <div key={e.id} style={{ ...styles.electionCard, opacity: 0.85 }}>
+              <div style={styles.cardLeft}>
+                <h3 style={styles.electionName}>{e.name}</h3>
+                <div style={styles.candidateRow}>
+                  {e.candidates.map((c, i) => (
+                    <span key={i} style={styles.candidateChip}>{c}</span>
+                  ))}
+                </div>
+              </div>
+              <div style={styles.cardRight}>
+                <div style={styles.votedBadge}>✅ Voted</div>
+              </div>
+            </div>
+          ))
+        )}
+      </section>
+
       {/* Results Available */}
       {talliedElections.length > 0 && (
-        <section style={styles.section}>
+        <section id="results-section" style={styles.section}>
           <h2 style={styles.sectionTitle}>
             <span style={{ ...styles.dot, background: '#FFA726' }} /> Results Available
           </h2>
@@ -264,6 +296,11 @@ const styles = {
   statLabel: {
     color: '#8899AA',
     fontSize: '0.85rem'
+  },
+  statHint: {
+    color: '#3A4F70',
+    fontSize: '0.75rem',
+    marginTop: '0.2rem'
   },
   section: {
     marginBottom: '2rem'
