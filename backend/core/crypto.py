@@ -9,7 +9,7 @@ class PaillierCrypto:
         self.public_key = None
         self.private_key = None
 
-    def generate_keypair(self, key_length=2048):
+    def generate_keypair(self, key_length=1024):
         """Generate Paillier public/private keypair"""
         pub, priv = paillier.generate_paillier_keypair(n_length=key_length)
         self.public_key = pub
@@ -54,20 +54,32 @@ class PaillierCrypto:
         return result.ciphertext()
 
 
+# Well-known safe 2048-bit prime (RFC 3526 Group 14) — used as Shamir field prime.
+# This is larger than any 1024-bit p or q, so it works for both 1024 and 2048-bit Paillier keys.
+_SAFE_PRIME_2048 = int(
+    "FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1"
+    "29024E088A67CC74020BBEA63B139B22514A08798E3404DD"
+    "EF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245"
+    "E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7ED"
+    "EE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3D"
+    "C2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F"
+    "83655D23DCA3AD961C62F356208552BB9ED529077096966D"
+    "670C354E4ABC9804F1746C08CA18217C32905E462E36CE3B"
+    "E39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9"
+    "DE2BCBF6955817183995497CEA956AE515D2261898FA0510"
+    "15728E5A8AACAA68FFFFFFFFFFFFFFFF", 16
+)
+
 def generate_trustee_shares(private_key_dict, n_shares=3, threshold=2):
     """
-    Shamir secret sharing for p and q using a large safe prime.
+    Shamir secret sharing for p and q using a known safe 2048-bit prime.
     Returns n_shares, each with p_share, q_share, and index.
     """
     p = int(private_key_dict['p'])
     q = int(private_key_dict['q'])
-    
-    # Use a fixed large prime for the field (must be > max(p, q))
-    # For 2048-bit keys, use a known 2048-bit prime
-    FIELD_PRIME = 2**2048 - 1  # Mersenne-ish; use a true large prime in production
-    # Simpler: use next_prime(max(p,q)*2) but for determinism, hardcode a safe modulus
-    # Here we use a practical approach: the field prime must exceed p and q
-    field_prime = next_prime_after(max(p, q) * 2)
+
+    # Use the precomputed safe prime — no expensive prime search needed
+    field_prime = _SAFE_PRIME_2048
     
     def shamir_share_simple(secret, n, k, prime):
         """Generate n shares with threshold k for secret mod prime"""

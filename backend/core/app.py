@@ -27,7 +27,11 @@ app.config["JWT_SECRET_KEY"] = os.getenv(
     "JWT_SECRET_KEY", "dev-secret-key-change-in-production"
 )
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=2)
-CORS(app, resources={r"/*": {"origins": "*"}})
+CORS(app,
+     resources={r"/*": {"origins": "*"}},
+     allow_headers=["Content-Type", "Authorization"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+     supports_credentials=False)
 jwt = JWTManager(app)
 
 HERE = os.path.dirname(__file__)
@@ -218,6 +222,8 @@ def authenticate():
     user = get_user(phone)
     if not user:
         return jsonify({'error': 'User not found'}), 404
+    if not user[5]:  # approved column
+        return jsonify({'error': 'Your account is pending admin approval. Please wait.'}), 403
     token = create_access_token(identity=phone)
     return jsonify({'token': token, 'user': {'id': user[0], 'name': user[1], 'phone': user[2], 'role': user[4]}}), 200
 
@@ -243,7 +249,8 @@ def list_elections():
             'candidate_photos': photos,
             'status': e[3],
             'public_key': json.loads(e[4]) if e[4] else None,
-            'end_time': e[6] if len(e) > 6 else None
+            'end_time': e[6] if len(e) > 6 else None,
+            'start_time': e[7] if len(e) > 7 else None
         })
     return jsonify(result), 200
 
@@ -260,6 +267,7 @@ def create_new_election():
     candidates = data.get('candidates', [])
     candidate_photos = data.get('candidate_photos', [])
     end_time_raw = data.get('end_time', None)
+    start_time_raw = data.get('start_time', None)
     # Legacy support: also accept duration_minutes
     duration_minutes = data.get('duration_minutes', 0)
 
@@ -277,23 +285,30 @@ def create_new_election():
     public_key_str = {'n': str(public_key['n']), 'g': str(public_key['g'])}
     shares = generate_trustee_shares(private_key, n_shares=3, threshold=2)
 
-    end_time = None
-    if end_time_raw:
-        # Use the end_time directly from frontend (ISO format, stored as-is)
+    def parse_iso(raw):
+        """Parse ISO datetime and store as UTC ISO string (with Z suffix)."""
+        if not raw:
+            return None
         try:
-            # Parse and re-serialize to normalize format
-            parsed = datetime.fromisoformat(end_time_raw.replace('Z', '+00:00'))
-            # Convert to IST for consistent storage
-            end_time = (parsed.replace(tzinfo=None) + IST_OFFSET).isoformat() if parsed.utcoffset() is not None else parsed.isoformat()
+            parsed = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+            if parsed.utcoffset() is not None:
+                # timezone-aware: convert to UTC naive
+                utc = parsed.replace(tzinfo=None) - parsed.utcoffset()
+            else:
+                # naive datetime from frontend datetime-local input is local IST, convert to UTC
+                utc = parsed - IST_OFFSET
+            return utc.isoformat() + 'Z'
         except Exception:
-            end_time = end_time_raw
-    elif duration_minutes and duration_minutes > 0:
-        now_utc = datetime.utcnow()
-        now_ist = now_utc + IST_OFFSET
-        end_ist = now_ist + timedelta(minutes=duration_minutes)
-        end_time = end_ist.isoformat()
+            return raw
 
-    eid = create_election(name, json.dumps(candidates_with_photos), json.dumps(public_key_str), end_time)
+    end_time = parse_iso(end_time_raw)
+    start_time = parse_iso(start_time_raw)
+
+    if not end_time and duration_minutes and duration_minutes > 0:
+        end_time = (datetime.utcnow() + timedelta(minutes=duration_minutes)).isoformat() + 'Z' 
+
+    print(f"DEBUG CREATE: start_time_raw={start_time_raw!r} -> start_time={start_time!r}, end_time_raw={end_time_raw!r} -> end_time={end_time!r}")
+    eid = create_election(name, json.dumps(candidates_with_photos), json.dumps(public_key_str), end_time, start_time)
 
     trust = {}
     if os.path.exists(TRUSTEE_FILE):
@@ -317,7 +332,8 @@ def create_new_election():
         'election_id': eid,
         'message': 'Election created. Trustee shares printed in console.',
         'public_key': public_key_str,
-        'end_time': end_time
+        'end_time': end_time,
+        'start_time': start_time
     }), 201
 
 
@@ -372,7 +388,8 @@ def edit_election_route(election_id):
     name             = data.get('name', '').strip()
     candidates       = data.get('candidates', [])
     candidate_photos = data.get('candidate_photos', [])
-    duration_minutes = data.get('duration_minutes', 0)
+    start_time_raw   = data.get('start_time', None)
+    end_time_raw     = data.get('end_time', None)
 
     if not name or not isinstance(candidates, list) or len(candidates) < 2:
         return jsonify({'error': 'Invalid election data'}), 400
@@ -382,18 +399,27 @@ def edit_election_route(election_id):
         for i, c in enumerate(candidates)
     ]
 
-    end_time = None
-    if duration_minutes and duration_minutes > 0:
-        now_utc = datetime.utcnow()
-        now_ist = now_utc + IST_OFFSET
-        end_ist = now_ist + timedelta(minutes=duration_minutes)
-        end_time = end_ist.isoformat()
+    def parse_iso(raw):
+        if not raw:
+            return None
+        try:
+            parsed = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+            if parsed.utcoffset() is not None:
+                utc = parsed.replace(tzinfo=None) - parsed.utcoffset()
+            else:
+                utc = parsed - IST_OFFSET
+            return utc.isoformat() + 'Z'
+        except Exception:
+            return raw
+
+    end_time = parse_iso(end_time_raw)
+    start_time = parse_iso(start_time_raw)
 
     conn = __import__('models').get_conn()
     c = conn.cursor()
     c.execute(
-        "UPDATE elections SET name=?, candidates_json=?, end_time=? WHERE id=?",
-        (name, json.dumps(candidates_with_photos), end_time, election_id)
+        "UPDATE elections SET name=?, candidates_json=?, end_time=?, start_time=? WHERE id=?",
+        (name, json.dumps(candidates_with_photos), end_time, start_time, election_id)
     )
     conn.commit()
     conn.close()
@@ -443,12 +469,19 @@ def cast_vote():
     if e[3] != 'active':
         return jsonify({'error': 'Election not active'}), 403
 
+    now_utc = datetime.utcnow()
+
     if len(e) > 6 and e[6]:
-        end_time = datetime.fromisoformat(e[6])
-        now_utc = datetime.utcnow()
-        now_ist = now_utc + IST_OFFSET
-        if now_ist > end_time:
+        end_time = datetime.fromisoformat(e[6].replace('Z', ''))
+        if now_utc > end_time:
             return jsonify({'error': 'Voting period has ended'}), 403
+
+    if len(e) > 7 and e[7]:
+        start_time = datetime.fromisoformat(e[7].replace('Z', ''))
+        if now_utc < start_time:
+            # Display in IST for user-friendly message
+            start_ist = start_time + IST_OFFSET
+            return jsonify({'error': f'Voting has not started yet. It begins on {start_ist.strftime("%d/%m/%Y at %I:%M %p")} IST'}), 403
 
     entry = {
         'vote_id': f"vote_{election_id}_{int(time.time()*1000)}_{user[0]}",
@@ -692,6 +725,49 @@ def live_vote_count(election_id):
         'total_votes': len(votes),
         'counts': counts
     }), 200
+
+
+@app.route('/admin/pending-voters', methods=['GET'])
+@jwt_required()
+def get_pending_voters():
+    u = _get_current_user()
+    if not u or u[4] != 'admin':
+        return jsonify({'error': 'Admin access required'}), 403
+    conn = __import__('models').get_conn()
+    c = conn.cursor()
+    c.execute("SELECT id,name,phone,voter_id,dob,created_at,approved FROM users WHERE role='voter' ORDER BY created_at DESC")
+    rows = c.fetchall()
+    conn.close()
+    voters = [{'id': r[0], 'name': r[1], 'phone': r[2], 'voter_id': r[3], 'dob': r[4], 'created_at': r[5], 'approved': bool(r[6])} for r in rows]
+    return jsonify(voters), 200
+
+
+@app.route('/admin/approve-voter/<int:user_id>', methods=['POST'])
+@jwt_required()
+def approve_voter(user_id):
+    u = _get_current_user()
+    if not u or u[4] != 'admin':
+        return jsonify({'error': 'Admin access required'}), 403
+    conn = __import__('models').get_conn()
+    c = conn.cursor()
+    c.execute("UPDATE users SET approved=1 WHERE id=? AND role='voter'", (user_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Voter approved'}), 200
+
+
+@app.route('/admin/reject-voter/<int:user_id>', methods=['DELETE'])
+@jwt_required()
+def reject_voter(user_id):
+    u = _get_current_user()
+    if not u or u[4] != 'admin':
+        return jsonify({'error': 'Admin access required'}), 403
+    conn = __import__('models').get_conn()
+    c = conn.cursor()
+    c.execute("DELETE FROM users WHERE id=? AND role='voter'", (user_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Voter rejected and removed'}), 200
 
 
 @app.route('/admin/voter-status/<int:election_id>', methods=['GET'])

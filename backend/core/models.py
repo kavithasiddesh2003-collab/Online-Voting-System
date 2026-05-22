@@ -89,8 +89,14 @@ def init_db():
             voter_id TEXT,
             dob TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            role TEXT DEFAULT 'voter'
+            role TEXT DEFAULT 'voter',
+            approved INTEGER DEFAULT 0
         )""")
+        # Migrate existing DBs: add approved column if missing
+        try:
+            c.execute('ALTER TABLE users ADD COLUMN approved INTEGER DEFAULT 0')
+        except Exception:
+            pass
         c.execute("""CREATE TABLE IF NOT EXISTS elections (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
@@ -99,7 +105,8 @@ def init_db():
             paillier_public_key TEXT,
             results_json TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            end_time TEXT
+            end_time TEXT,
+            start_time TEXT
         )""")
         c.execute("""CREATE TABLE IF NOT EXISTS votes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -112,6 +119,10 @@ def init_db():
             c.execute("SELECT end_time FROM elections LIMIT 1")
         except sqlite3.OperationalError:
             c.execute("ALTER TABLE elections ADD COLUMN end_time TEXT")
+        try:
+            c.execute("SELECT start_time FROM elections LIMIT 1")
+        except sqlite3.OperationalError:
+            c.execute("ALTER TABLE elections ADD COLUMN start_time TEXT")
 
     conn.commit()
     conn.close()
@@ -167,7 +178,7 @@ def get_user(phone):
     conn = get_conn()
     c = conn.cursor()
     c.execute(
-        f"SELECT id,name,phone,created_at,role FROM users WHERE phone={PH}", (phone,)
+        f"SELECT id,name,phone,created_at,role,approved FROM users WHERE phone={PH}", (phone,)
     )
     row = c.fetchone()
     conn.close()
@@ -201,7 +212,7 @@ def get_election(election_id):
     conn = get_conn()
     c = conn.cursor()
     c.execute(
-        f"SELECT id,name,candidates_json,status,paillier_public_key,results_json,end_time FROM elections WHERE id={PH}",
+        f"SELECT id,name,candidates_json,status,paillier_public_key,results_json,end_time,start_time FROM elections WHERE id={PH}",
         (election_id,),
     )
     row = c.fetchone()
@@ -213,19 +224,19 @@ def get_all_elections():
     conn = get_conn()
     c = conn.cursor()
     c.execute(
-        "SELECT id,name,candidates_json,status,paillier_public_key,results_json,end_time FROM elections ORDER BY id DESC"
+        "SELECT id,name,candidates_json,status,paillier_public_key,results_json,end_time,start_time FROM elections ORDER BY id DESC"
     )
     rows = c.fetchall()
     conn.close()
     return rows
 
 
-def create_election(name, candidates_json, public_key_json, end_time=None):
+def create_election(name, candidates_json, public_key_json, end_time=None, start_time=None):
     conn = get_conn()
     c = conn.cursor()
     c.execute(
-        f"INSERT INTO elections (name,candidates_json,status,paillier_public_key,end_time) VALUES ({PH},{PH},{PH},{PH},{PH})",
-        (name, candidates_json, "active", public_key_json, end_time),
+        f"INSERT INTO elections (name,candidates_json,status,paillier_public_key,end_time,start_time) VALUES ({PH},{PH},{PH},{PH},{PH},{PH})",
+        (name, candidates_json, "active", public_key_json, end_time, start_time),
     )
     conn.commit()
     eid = c.lastrowid
