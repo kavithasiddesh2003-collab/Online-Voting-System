@@ -128,6 +128,18 @@ def register():
     if not user:
         return jsonify({'error': 'Phone number not found on voter roll. Contact admin.'}), 403
 
+    # Check if voter has already completed registration (password already set)
+    try:
+        conn = __import__('models').get_conn()
+        c = conn.cursor()
+        c.execute("SELECT password_hash FROM users WHERE phone=?", (phone,))
+        row = c.fetchone()
+        conn.close()
+        if row and row[0]:
+            return jsonify({'error': 'You are already registered. Please sign in using your password.'}), 409
+    except Exception:
+        pass
+
     pwd_hash = generate_password_hash(password) if password else None
 
     # Update voter_id, dob, password_hash if provided
@@ -144,10 +156,7 @@ def register():
         except Exception:
             pass
 
-    code = generate_otp(phone)
-    otp_store[phone] = {'otp': code, 'timestamp': time.time(), 'attempts': 0}
-    send_otp(phone, code)
-    return jsonify({'message': 'OTP sent to your phone. Use Login to continue.', 'phone': phone}), 200
+    return jsonify({'message': 'Registration successful! You can now sign in.', 'phone': phone}), 200
 
 
 @app.route('/request-otp', methods=['POST'])
@@ -160,6 +169,8 @@ def request_otp_route():
     user = get_user(phone)
     if not user:
         return jsonify({'error': 'Phone number not found on voter roll.'}), 403
+    if not user[5]:  # approved column
+        return jsonify({'error': 'Your account is pending admin approval. Please wait for the admin to approve your registration.'}), 403
     code = generate_otp(phone)
     otp_store[phone] = {'otp': code, 'timestamp': time.time(), 'attempts': 0}
     send_otp(phone, code)
