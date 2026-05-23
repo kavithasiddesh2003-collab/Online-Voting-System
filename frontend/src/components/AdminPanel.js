@@ -438,6 +438,12 @@ function AdminPanel({ token }) {
 
   return (
     <div style={styles.container}>
+      <style>{`
+        input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+          filter: brightness(0) invert(1) sepia(1) saturate(10) hue-rotate(175deg) brightness(2);
+          opacity: 1; cursor: pointer; width: 18px; height: 18px;
+        }
+      `}</style>
       {showCreate && (
         <CreateElectionModal
           token={token}

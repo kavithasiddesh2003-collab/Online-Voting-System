@@ -121,42 +121,30 @@ def register():
     dob       = data.get('dob', '').strip() or None
     password  = data.get('password', '').strip() or None
 
-    if not raw_phone:
-        return jsonify({'error': 'Phone number required'}), 400
+    if not raw_phone or not name:
+        return jsonify({'error': 'Name and phone number are required'}), 400
     phone = _normalize_phone(raw_phone)
-    user = get_user(phone)
-    if not user:
-        return jsonify({'error': 'Phone number not found on voter roll. Contact admin.'}), 403
 
-    # Check if voter has already completed registration (password already set)
-    try:
-        conn = __import__('models').get_conn()
-        c = conn.cursor()
-        c.execute("SELECT password_hash FROM users WHERE phone=?", (phone,))
-        row = c.fetchone()
-        conn.close()
-        if row and row[0]:
-            return jsonify({'error': 'You are already registered. Please sign in using your password.'}), 409
-    except Exception:
-        pass
+    existing = get_user(phone)
+    if existing:
+        return jsonify({'error': 'This phone number is already registered'}), 409
 
     pwd_hash = generate_password_hash(password) if password else None
 
-    # Update voter_id, dob, password_hash if provided
-    if voter_id or dob or pwd_hash:
-        try:
-            conn = __import__('models').get_conn()
-            c = conn.cursor()
-            c.execute(
-                "UPDATE users SET voter_id=?, dob=?, password_hash=? WHERE phone=?",
-                (voter_id, dob, pwd_hash, phone)
-            )
-            conn.commit()
-            conn.close()
-        except Exception:
-            pass
+    # Insert new voter directly into DB (approved=0, pending admin approval)
+    try:
+        conn = __import__('models').get_conn()
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO users (name, phone, voter_id, dob, password_hash, role, approved) VALUES (?, ?, ?, ?, ?, 'voter', 0)",
+            (name, phone, voter_id, dob, pwd_hash)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        return jsonify({'error': f'Registration failed: {str(e)}'}), 500
 
-    return jsonify({'message': 'Registration successful! You can now sign in.', 'phone': phone}), 200
+    return jsonify({'message': 'Registration successful! Waiting for admin approval before you can log in.'}), 201
 
 
 @app.route('/request-otp', methods=['POST'])
@@ -168,9 +156,9 @@ def request_otp_route():
     phone = _normalize_phone(raw_phone)
     user = get_user(phone)
     if not user:
-        return jsonify({'error': 'Phone number not found on voter roll.'}), 403
+        return jsonify({'error': 'Phone number not registered. Please register first.'}), 404
     if not user[5]:  # approved column
-        return jsonify({'error': 'Your account is pending admin approval. Please wait for the admin to approve your registration.'}), 403
+        return jsonify({'error': 'Your account is pending admin approval. You cannot log in yet.'}), 403
     code = generate_otp(phone)
     otp_store[phone] = {'otp': code, 'timestamp': time.time(), 'attempts': 0}
     send_otp(phone, code)
@@ -212,29 +200,40 @@ def admin_login():
 
 @app.route('/auth', methods=['POST'])
 def authenticate():
+    from werkzeug.security import check_password_hash
     data = request.json or {}
     raw_phone = data.get('phone', '').strip()
+    password  = data.get('password', '').strip()
     otp_input = data.get('otp', '').strip()
-    if not raw_phone or not otp_input:
-        return jsonify({'error': 'Phone number and OTP required'}), 400
+    if not raw_phone or not password or not otp_input:
+        return jsonify({'error': 'Phone number, password, and OTP are all required'}), 400
     phone = _normalize_phone(raw_phone)
+    # 1. Check user exists
+    user = get_user(phone)
+    if not user:
+        return jsonify({'error': 'Phone number not registered. Please register first.'}), 404
+    # 2. Check approved
+    if not user[5]:
+        return jsonify({'error': 'Your account is pending admin approval. Please wait.'}), 403
+    # 3. Check password
+    conn = __import__('models').get_conn()
+    row = conn.execute("SELECT password_hash FROM users WHERE phone=?", (phone,)).fetchone()
+    conn.close()
+    if not row or not row[0] or not check_password_hash(row[0], password):
+        return jsonify({'error': 'Incorrect password.'}), 401
+    # 4. Check OTP
     if phone not in otp_store:
-        return jsonify({'error': 'No OTP request found. Please request a code first.'}), 404
+        return jsonify({'error': 'No OTP found. Please request an OTP first.'}), 400
     rec = otp_store[phone]
     if rec['attempts'] >= 3:
-        return jsonify({'error': 'Too many attempts. Request a new OTP.'}), 429
+        return jsonify({'error': 'Too many OTP attempts. Request a new one.'}), 429
+    if time.time() - rec['timestamp'] > 300:
+        del otp_store[phone]
+        return jsonify({'error': 'OTP expired. Please request a new one.'}), 401
     if not verify_otp(phone, otp_input, rec['otp']):
         rec['attempts'] += 1
         return jsonify({'error': f'Invalid OTP. {3 - rec["attempts"]} attempts left.'}), 401
-    if time.time() - rec['timestamp'] > 300:
-        del otp_store[phone]
-        return jsonify({'error': 'OTP expired. Request a new OTP.'}), 401
     del otp_store[phone]
-    user = get_user(phone)
-    if not user:
-        return jsonify({'error': 'User not found'}), 404
-    if not user[5]:  # approved column
-        return jsonify({'error': 'Your account is pending admin approval. Please wait.'}), 403
     token = create_access_token(identity=phone)
     return jsonify({'token': token, 'user': {'id': user[0], 'name': user[1], 'phone': user[2], 'role': user[4]}}), 200
 
@@ -763,7 +762,36 @@ def approve_voter(user_id):
     c = conn.cursor()
     c.execute("UPDATE users SET approved=1 WHERE id=? AND role='voter'", (user_id,))
     conn.commit()
+    # Fetch voter details to write to CSV
+    row = conn.execute(
+        "SELECT name, phone, voter_id, dob, password_hash FROM users WHERE id=?", (user_id,)
+    ).fetchone()
     conn.close()
+
+    if row:
+        import csv, os
+        csv_path = os.path.join(DATABASE_DIR, 'users.csv')
+        name, phone, voter_id, dob, _ = row
+        # Check if already in CSV to avoid duplicates
+        already_exists = False
+        if os.path.exists(csv_path):
+            with open(csv_path, 'r', newline='', encoding='utf-8') as f:
+                for csv_row in csv.DictReader(f):
+                    if csv_row.get('phone') == phone:
+                        already_exists = True
+                        break
+        if not already_exists:
+            with open(csv_path, 'a', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                # Ensure file ends with newline before appending
+                f.seek(0, 2)
+                if f.tell() > 0:
+                    f.seek(f.tell() - 1)
+                    last_char = f.read(1)
+                    if last_char != '\n':
+                        f.write('\n')
+                writer.writerow([name, phone, 'voter', '', '', voter_id or '', dob or ''])
+
     return jsonify({'message': 'Voter approved'}), 200
 
 
@@ -775,9 +803,25 @@ def reject_voter(user_id):
         return jsonify({'error': 'Admin access required'}), 403
     conn = __import__('models').get_conn()
     c = conn.cursor()
+    # Get phone before deleting
+    row = conn.execute("SELECT phone FROM users WHERE id=? AND role='voter'", (user_id,)).fetchone()
     c.execute("DELETE FROM users WHERE id=? AND role='voter'", (user_id,))
     conn.commit()
     conn.close()
+
+    # Remove from users.csv if present
+    if row:
+        import csv, os
+        phone = row[0]
+        csv_path = os.path.join(DATABASE_DIR, 'users.csv')
+        if os.path.exists(csv_path):
+            with open(csv_path, 'r', newline='', encoding='utf-8') as f:
+                rows = list(csv.reader(f))
+            # Keep header + all rows where phone doesn't match
+            filtered = [rows[0]] + [r for r in rows[1:] if len(r) < 2 or r[1] != phone]
+            with open(csv_path, 'w', newline='', encoding='utf-8') as f:
+                csv.writer(f).writerows(filtered)
+
     return jsonify({'message': 'Voter rejected and removed'}), 200
 
 
