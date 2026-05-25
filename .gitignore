@@ -6,3 +6,4 @@ build/
 .env
 bulletin.json
 trustee_keys.json
+database/*.csv
