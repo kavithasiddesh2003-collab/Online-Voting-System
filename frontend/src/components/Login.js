@@ -141,6 +141,9 @@ function Login({ onLogin }) {
         {/* Voter Login */}
         {tab === 'voter' && (
           <form onSubmit={handleVoterLogin} autoComplete="off">
+            {/* Dummy fields to prevent browser save-password prompt */}
+            <input type="text" name="username" style={{ display: 'none' }} readOnly />
+            <input type="password" name="password" style={{ display: 'none' }} readOnly />
             <div className="lg-field">
               <label>Phone Number</label>
               <div style={{ display: 'flex', alignItems: 'stretch' }}>
@@ -158,7 +161,7 @@ function Login({ onLogin }) {
             <div className="lg-field">
               <label>Password</label>
               <div className="lg-pass-wrap" style={{ position: 'relative' }}>
-                <input type={showPass ? 'text' : 'password'} autoComplete="off" data-form-type="other"
+                <input type={showPass ? 'text' : 'password'} autoComplete="off" data-form-type="other" name="voter-secret"
                   placeholder="" style={{ paddingRight: '3rem' }}
                   value={password} onChange={(e) => setPassword(e.target.value)} required />
                 <button type="button" className="lg-eye" onClick={() => setShowPass(p => !p)} aria-label="Toggle password">
@@ -190,6 +193,8 @@ function Login({ onLogin }) {
         {/* Admin Login */}
         {tab === 'admin' && (
           <form onSubmit={handleAdminLogin} autoComplete="off">
+            <input type="text" name="username" style={{ display: 'none' }} readOnly />
+            <input type="password" name="password" style={{ display: 'none' }} readOnly />
             <div className="lg-field">
               <label>Admin Email</label>
               <input type="email" autoComplete="email" placeholder=""
@@ -197,7 +202,7 @@ function Login({ onLogin }) {
             </div>
             <div className="lg-field">
               <label>Password</label>
-              <input type="password" autoComplete="off" data-form-type="other" placeholder=""
+              <input type="password" autoComplete="off" data-form-type="other" name="admin-secret" placeholder=""
                 value={password} onChange={(e) => setPassword(e.target.value)} required />
             </div>
             {msg   && <div className="lg-msg-success">{msg}</div>}

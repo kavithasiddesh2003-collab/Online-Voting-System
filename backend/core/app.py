@@ -34,13 +34,14 @@ CORS(app,
      supports_credentials=False)
 jwt = JWTManager(app)
 
-HERE = os.path.dirname(__file__)
+HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.abspath(os.path.join(HERE, '..', '..'))
 DATABASE_DIR = os.path.join(ROOT_DIR, 'database')
 BULLETIN_FILE = os.path.join(DATABASE_DIR, 'bulletin.json')
 TRUSTEE_FILE = os.path.join(DATABASE_DIR, 'trustee_keys.json')
 
 os.makedirs(DATABASE_DIR, exist_ok=True)
+print(f"DATABASE_DIR: {DATABASE_DIR}")
 
 # IST timezone offset
 IST_OFFSET = timedelta(hours=5, minutes=30)
@@ -460,8 +461,6 @@ def cast_vote():
     user = _get_current_user()
     if not user:
         return jsonify({'error': 'User not found'}), 404
-    if user[4] == 'admin':
-        return jsonify({'error': 'Admins are not allowed to vote'}), 403
 
     data = request.json or {}
     election_id = data.get('election_id')
@@ -769,28 +768,43 @@ def approve_voter(user_id):
     conn.close()
 
     if row:
-        import csv, os
-        csv_path = os.path.join(DATABASE_DIR, 'users.csv')
-        name, phone, voter_id, dob, _ = row
-        # Check if already in CSV to avoid duplicates
-        already_exists = False
-        if os.path.exists(csv_path):
-            with open(csv_path, 'r', newline='', encoding='utf-8') as f:
-                for csv_row in csv.DictReader(f):
-                    if csv_row.get('phone') == phone:
-                        already_exists = True
-                        break
-        if not already_exists:
-            with open(csv_path, 'a', newline='', encoding='utf-8') as f:
-                writer = csv.writer(f)
-                # Ensure file ends with newline before appending
-                f.seek(0, 2)
-                if f.tell() > 0:
-                    f.seek(f.tell() - 1)
-                    last_char = f.read(1)
-                    if last_char != '\n':
-                        f.write('\n')
-                writer.writerow([name, phone, 'voter', '', '', voter_id or '', dob or ''])
+        try:
+            import csv as csv_module
+            csv_path = os.path.join(DATABASE_DIR, 'users.csv')
+            print(f"CSV PATH: {csv_path}")
+            name, phone, voter_id, dob, _ = row
+
+            def norm_phone(p):
+                return p.strip().replace(' ', '').replace('-', '').replace('+91', '').lstrip('0')
+
+            already_exists = False
+            if os.path.exists(csv_path):
+                with open(csv_path, 'r', newline='', encoding='utf-8') as f:
+                    for csv_row in csv_module.DictReader(f):
+                        if norm_phone(csv_row.get('phone', '')) == norm_phone(phone):
+                            already_exists = True
+                            break
+
+            if not already_exists:
+                # Ensure trailing newline
+                if os.path.exists(csv_path):
+                    with open(csv_path, 'rb') as f:
+                        f.seek(0, 2)
+                        if f.tell() > 0:
+                            f.seek(-1, 2)
+                            if f.read(1) != b'\n':
+                                with open(csv_path, 'ab') as fa:
+                                    fa.write(b'\n')
+                with open(csv_path, 'a', newline='', encoding='utf-8') as f:
+                    writer = csv_module.writer(f)
+                    writer.writerow([name, phone, 'voter', '', '', voter_id or '', dob or ''])
+                print(f"CSV: added {name} ({phone})")
+            else:
+                print(f"CSV: {name} ({phone}) already exists, skipping")
+        except Exception as e:
+            import traceback
+            print(f"CSV ERROR during approve: {e}")
+            traceback.print_exc()
 
     return jsonify({'message': 'Voter approved'}), 200
 
@@ -798,29 +812,45 @@ def approve_voter(user_id):
 @app.route('/admin/reject-voter/<int:user_id>', methods=['DELETE'])
 @jwt_required()
 def reject_voter(user_id):
+    import csv as csv_module
     u = _get_current_user()
     if not u or u[4] != 'admin':
         return jsonify({'error': 'Admin access required'}), 403
     conn = __import__('models').get_conn()
     c = conn.cursor()
-    # Get phone before deleting
     row = conn.execute("SELECT phone FROM users WHERE id=? AND role='voter'", (user_id,)).fetchone()
+    if not row:
+        conn.close()
+        return jsonify({'error': 'Voter not found'}), 404
+    phone = row[0]
     c.execute("DELETE FROM users WHERE id=? AND role='voter'", (user_id,))
     conn.commit()
     conn.close()
 
-    # Remove from users.csv if present
-    if row:
-        import csv, os
-        phone = row[0]
+    # Remove from users.csv
+    try:
         csv_path = os.path.join(DATABASE_DIR, 'users.csv')
         if os.path.exists(csv_path):
+            import csv as csv_mod
+            def norm(p):
+                return p.strip().replace(' ', '').replace('-', '').replace('+91', '').lstrip('0')
+            norm_phone = norm(phone)
             with open(csv_path, 'r', newline='', encoding='utf-8') as f:
-                rows = list(csv.reader(f))
-            # Keep header + all rows where phone doesn't match
-            filtered = [rows[0]] + [r for r in rows[1:] if len(r) < 2 or r[1] != phone]
+                all_rows = list(csv_mod.reader(f))
+            header = all_rows[0] if all_rows else []
+            data_rows = all_rows[1:] if len(all_rows) > 1 else []
+            filtered = [r for r in data_rows if len(r) < 2 or norm(r[1]) != norm_phone]
+            removed = len(data_rows) - len(filtered)
             with open(csv_path, 'w', newline='', encoding='utf-8') as f:
-                csv.writer(f).writerows(filtered)
+                writer = csv_mod.writer(f)
+                if header:
+                    writer.writerow(header)
+                writer.writerows(filtered)
+            print(f"CSV: removed {removed} row(s) for phone {norm_phone}")
+    except Exception as e:
+        import traceback
+        print(f"CSV ERROR during reject: {e}")
+        traceback.print_exc()
 
     return jsonify({'message': 'Voter rejected and removed'}), 200
 

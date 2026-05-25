@@ -128,7 +128,7 @@ function CreateElectionModal({ token, onClose, onCreated }) {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const addRow = () => setRows([...rows, { name: '', photo: '' }]);
+  const addRow = () => rows.length < 20 && setRows([...rows, { name: '', photo: '' }]);
   const removeRow = (idx) => rows.length > 2 && setRows(rows.filter((_, i) => i !== idx));
   const updateRow = (idx, field, value) => {
     const updated = [...rows];
@@ -175,12 +175,8 @@ function CreateElectionModal({ token, onClose, onCreated }) {
         </div>
 
         <label style={cm.label}>ELECTION TITLE</label>
-        <input style={cm.input} type="text" placeholder="e.g. Student Council Election 2026"
+        <input style={cm.input} type="text" placeholder=""
           value={title} onChange={e => setTitle(e.target.value)} />
-
-        <label style={cm.label}>DESCRIPTION</label>
-        <textarea style={cm.textarea} placeholder="Describe the election..."
-          value={description} onChange={e => setDescription(e.target.value)} rows={3} />
 
         <div style={cm.dateRow}>
           <div style={{ flex: 1 }}>
@@ -214,7 +210,12 @@ function CreateElectionModal({ token, onClose, onCreated }) {
           </div>
         ))}
 
-        <button onClick={addRow} style={cm.addCandidateBtn}>+ Add Candidate</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <button onClick={addRow} disabled={rows.length >= 20} style={{ ...cm.addCandidateBtn, opacity: rows.length >= 20 ? 0.4 : 1, cursor: rows.length >= 20 ? 'not-allowed' : 'pointer' }}>+ Add Candidate</button>
+          <span style={{ fontSize: '0.78rem', color: rows.length >= 20 ? '#FF6B6B' : '#8899AA' }}>
+            {rows.length}/20 {rows.length >= 20 ? '— Maximum reached' : ''}
+          </span>
+        </div>
 
         {error && <div style={{ color: '#FF6B6B', fontSize: '0.85rem', margin: '0.5rem 0' }}>{error}</div>}
 
@@ -275,7 +276,7 @@ function EditModal({ election, token, onClose, onSaved }) {
     updated[idx][field] = value;
     setRows(updated);
   };
-  const addRow = () => setRows([...rows, { name: '', photo: '' }]);
+  const addRow = () => rows.length < 20 && setRows([...rows, { name: '', photo: '' }]);
   const removeRow = (idx) => rows.length > 2 && setRows(rows.filter((_, i) => i !== idx));
 
   const save = async () => {
@@ -318,7 +319,10 @@ function EditModal({ election, token, onClose, onSaved }) {
         <div style={{ marginBottom: '0.8rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
             <span style={{ color: '#E6EEF8', fontWeight: 700 }}>Candidates</span>
-            <button onClick={addRow} style={modal.addBtn}>+ Add</button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
+                <button onClick={addRow} disabled={rows.length >= 20} style={{ ...modal.addBtn, opacity: rows.length >= 20 ? 0.4 : 1, cursor: rows.length >= 20 ? 'not-allowed' : 'pointer' }}>+ Add</button>
+                <span style={{ fontSize: '0.75rem', color: rows.length >= 20 ? '#FF6B6B' : '#8899AA' }}>{rows.length}/20{rows.length >= 20 ? ' — Max' : ''}</span>
+              </div>
           </div>
           {rows.map((row, idx) => (
             <div key={idx} style={modal.candidateRow}>
@@ -369,6 +373,7 @@ function AdminPanel({ token }) {
   const [voterStatusId, setVoterStatusId] = useState(null);
   const [editingElection, setEditingElection] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [showVoters, setShowVoters] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -467,7 +472,10 @@ function AdminPanel({ token }) {
 
       {/* Voter Approval Section */}
       <div style={{ ...styles.section, marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+        <div
+          onClick={() => setShowVoters(v => !v)}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
+        >
           <h3 style={{ margin: 0 }}>
             👥 Voter Registrations
             {pendingVoters.filter(v => !v.approved).length > 0 && (
@@ -476,9 +484,12 @@ function AdminPanel({ token }) {
               </span>
             )}
           </h3>
+          <span style={{ color: '#6CA2FF', fontSize: '0.85rem', fontWeight: 600 }}>
+            {showVoters ? '▲ Hide' : '▼ Show'}
+          </span>
         </div>
-        {pendingVoters.length === 0 ? (
-          <div style={styles.emptyState}><p style={{ color: '#8899AA', margin: 0 }}>No registered voters yet.</p></div>
+        {showVoters && (pendingVoters.length === 0 ? (
+          <div style={{ ...styles.emptyState, marginTop: '1rem' }}><p style={{ color: '#8899AA', margin: 0 }}>No registered voters yet.</p></div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
@@ -519,7 +530,7 @@ function AdminPanel({ token }) {
               </tbody>
             </table>
           </div>
-        )}
+        ))}
       </div>
 
       <div style={styles.section}>

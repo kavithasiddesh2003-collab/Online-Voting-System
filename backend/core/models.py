@@ -123,6 +123,12 @@ def init_db():
             c.execute("SELECT start_time FROM elections LIMIT 1")
         except sqlite3.OperationalError:
             c.execute("ALTER TABLE elections ADD COLUMN start_time TEXT")
+        try:
+            c.execute("SELECT approved FROM users LIMIT 1")
+        except sqlite3.OperationalError:
+            c.execute("ALTER TABLE users ADD COLUMN approved INTEGER DEFAULT 0")
+            # Auto-approve existing voters seeded from CSV
+            c.execute("UPDATE users SET approved=1 WHERE role='voter'")
 
     conn.commit()
     conn.close()
