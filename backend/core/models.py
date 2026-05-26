@@ -195,8 +195,9 @@ def seed_users_from_csv():
                         (name, phone, email, pwd_hash, voter_id, dob, role),
                     )
                 else:
+                    # CSV-seeded users are pre-verified → approved=1
                     c.execute(
-                        "INSERT OR IGNORE INTO users (name,phone,email,password_hash,voter_id,dob,role) VALUES (?,?,?,?,?,?,?)",
+                        "INSERT OR IGNORE INTO users (name,phone,email,password_hash,voter_id,dob,role,approved) VALUES (?,?,?,?,?,?,?,1)",
                         (name, phone, email, pwd_hash, voter_id, dob, role),
                     )
             except Exception:

@@ -438,6 +438,9 @@ def edit_election_route(election_id):
     conn.close()
 
     return jsonify({'message': 'Election updated successfully'}), 200
+
+
+@app.route('/admin/election/<int:election_id>/shares', methods=['GET'])
 @jwt_required()
 def get_election_shares(election_id):
     u = _get_current_user()
@@ -699,6 +702,9 @@ def get_voter_list(election_id):
         'voted_count': len(voted_ids),
         'voters': voters
     }), 200
+
+
+@app.route('/bulletin', methods=['GET'])
 def get_bulletin():
     return jsonify(_read_bulletin_safe()), 200
 

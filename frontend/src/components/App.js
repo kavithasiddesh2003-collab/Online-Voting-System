@@ -70,7 +70,7 @@ function AppInner() {
         <Route path="/voter" element={user ? <VoterPanel token={token} user={user} /> : <Navigate to="/login" />} />
         <Route path="/elections" element={user ? <ElectionList token={token} user={user} /> : <Navigate to="/login" />} />
         <Route path="/vote/:electionId" element={user ? <VoteForm token={token} user={user} /> : <Navigate to="/login" />} />
-        <Route path="/admin" element={user && user.role === 'admin' ? <AdminPanel token={token} /> : <Navigate to="/login" />} />
+        <Route path="/admin" element={user && user.role === 'admin' ? <AdminPanel token={token} user={user} onLogout={handleLogout} /> : <Navigate to="/login" />} />
         <Route path="/results/:electionId" element={<Results />} />
       </Routes>
     </div>
