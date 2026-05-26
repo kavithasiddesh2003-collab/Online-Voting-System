@@ -1,631 +1,223 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../api';
-import { useNavigate } from 'react-router-dom';
 
-const COLORS = ['#6CA2FF', '#3EB489', '#FFA726', '#FF6B6B', '#A78BFA', '#34D399'];
-
-function LiveResults({ electionId, token }) {
-  const [data, setData] = useState(null);
-  useEffect(() => {
-    fetchLive();
-    const interval = setInterval(fetchLive, 5000);
-    return () => clearInterval(interval);
-  }, [electionId]);
-  const fetchLive = async () => {
-    try {
-      const res = await api.get(`/admin/live-count/${electionId}`, { headers: { Authorization: `Bearer ${token}` } });
-      setData(res.data);
-    } catch {}
-  };
-  if (!data) return <div style={{ color: '#8899AA', fontSize: '0.85rem', padding: '0.5rem' }}>Loading...</div>;
-  const total = data.total_votes;
-  const entries = Object.entries(data.counts).sort((a, b) => b[1] - a[1]);
-  return (
-    <div style={liveStyles.box}>
-      <div style={liveStyles.header}>
-        📊 Live Vote Count — <span style={{ color: '#8CFAC7' }}>{total} vote{total !== 1 ? 's' : ''} so far</span>
-        <span style={{ fontSize: '0.72rem', color: '#8899AA', marginLeft: '0.5rem' }}>(refreshes every 5s)</span>
-      </div>
-      {entries.map(([name, count], idx) => {
-        const pct = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
-        const color = COLORS[idx % COLORS.length];
-        return (
-          <div key={name} style={liveStyles.row}>
-            <div style={liveStyles.rowTop}>
-              <span style={{ ...liveStyles.name, color }}>{name}</span>
-              <span style={{ ...liveStyles.count, color }}>{count} vote{count !== 1 ? 's' : ''} ({pct}%)</span>
-            </div>
-            <div style={liveStyles.track}>
-              <div style={{ ...liveStyles.fill, width: `${pct}%`, background: `linear-gradient(90deg, ${color}, ${color}88)` }} />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-const liveStyles = {
-  box: { marginTop: '0.8rem', background: '#0B1220', border: '1px solid #263250', borderRadius: '10px', padding: '1rem' },
-  header: { fontSize: '0.88rem', fontWeight: 700, marginBottom: '0.8rem', color: '#E6EEF8' },
-  row: { marginBottom: '0.7rem' },
-  rowTop: { display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' },
-  name: { fontSize: '0.88rem', fontWeight: 600 },
-  count: { fontSize: '0.82rem', fontWeight: 700 },
-  track: { background: '#162033', height: '14px', borderRadius: '7px', overflow: 'hidden' },
-  fill: { height: '100%', borderRadius: '7px', transition: 'width 0.5s ease' }
-};
-
-function VoterStatus({ electionId, token }) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 10000);
-    return () => clearInterval(interval);
-  }, [electionId]);
-  const fetchStatus = async () => {
-    try {
-      const res = await api.get(`/admin/voter-status/${electionId}`, { headers: { Authorization: `Bearer ${token}` } });
-      setData(res.data);
-    } catch {}
-    finally { setLoading(false); }
-  };
-  if (loading) return <div style={{ color: '#8899AA', padding: '0.5rem' }}>Loading voter list...</div>;
-  if (!data) return null;
-  return (
-    <div style={vsStyles.box}>
-      <div style={vsStyles.header}>
-        👥 Voter Status — <span style={{ color: '#8CFAC7' }}>{data.total_voted}</span>
-        <span style={{ color: '#8899AA' }}> / {data.total_voters} voted</span>
-        <span style={{ fontSize: '0.72rem', color: '#8899AA', marginLeft: '0.5rem' }}>(refreshes every 10s)</span>
-      </div>
-      <div style={vsStyles.tableWrap}>
-        <table style={vsStyles.table}>
-          <thead>
-            <tr>
-              <th style={vsStyles.th}>Name</th>
-              <th style={vsStyles.th}>Phone</th>
-              <th style={vsStyles.th}>Voter ID</th>
-              <th style={vsStyles.th}>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.voters.map(v => (
-              <tr key={v.id} style={{ borderBottom: '1px solid #1E2B44' }}>
-                <td style={vsStyles.td}>{v.name}</td>
-                <td style={vsStyles.td}>{v.phone || '—'}</td>
-                <td style={vsStyles.td}>{v.voter_id || '—'}</td>
-                <td style={vsStyles.td}>
-                  {v.voted ? <span style={vsStyles.voted}>✅ Voted</span> : <span style={vsStyles.notVoted}>⏳ Not yet</span>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-const vsStyles = {
-  box: { marginTop: '0.8rem', background: '#0B1220', border: '1px solid #263250', borderRadius: '10px', padding: '1rem' },
-  header: { fontSize: '0.88rem', fontWeight: 700, marginBottom: '0.8rem', color: '#E6EEF8' },
-  tableWrap: { overflowX: 'auto' },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' },
-  th: { textAlign: 'left', padding: '0.5rem 0.8rem', color: '#6CA2FF', fontWeight: 700, borderBottom: '1px solid #263250', whiteSpace: 'nowrap' },
-  td: { padding: '0.5rem 0.8rem', color: '#E6EEF8' },
-  voted: { background: '#1B3A2F', color: '#8CFAC7', border: '1px solid #2E6B50', padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 700 },
-  notVoted: { background: '#2A2000', color: '#FFA726', border: '1px solid #7A5200', padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.78rem', fontWeight: 700 }
-};
-
-function CreateElectionModal({ token, onClose, onCreated }) {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [rows, setRows] = useState([{ name: '', photo: '' }, { name: '', photo: '' }]);
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const addRow = () => rows.length < 20 && setRows([...rows, { name: '', photo: '' }]);
-  const removeRow = (idx) => rows.length > 2 && setRows(rows.filter((_, i) => i !== idx));
-  const updateRow = (idx, field, value) => {
-    const updated = [...rows];
-    updated[idx][field] = value;
-    setRows(updated);
-  };
-
-  const handleCreate = async () => {
-    const validRows = rows.filter(r => r.name.trim());
-    if (!title.trim()) { setError('Enter election title.'); return; }
-    if (validRows.length < 2) { setError('Add at least 2 candidates.'); return; }
-    if (endDate && startDate && new Date(endDate) <= new Date(startDate)) {
-      setError('End date must be after start date.'); return;
-    }
-    setSaving(true); setError('');
-    try {
-      await api.post('/admin/election', {
-        name: title.trim(),
-        description: description.trim(),
-        candidates: validRows.map(r => r.name.trim()),
-        candidate_photos: validRows.map(r => r.photo.trim()),
-        end_time: endDate ? new Date(endDate).toISOString() : null,
-        start_time: startDate ? new Date(startDate).toISOString() : null
-      }, { headers: { Authorization: `Bearer ${token}` } });
-      onCreated();
-      onClose();
-    } catch (err) {
-      console.error('Create election error:', err);
-      console.error('Response:', err.response);
-      console.error('Response data:', err.response?.data);
-      console.error('Token used:', token ? token.substring(0, 20) + '...' : 'NULL TOKEN!');
-      const msg = err.response?.data?.error
-        || (err.response ? `Server error ${err.response.status}: ${JSON.stringify(err.response.data)}` : `Network error: ${err.message}`);
-      setError(msg);
-    } finally { setSaving(false); }
-  };
-
-  return (
-    <div style={cm.overlay}>
-      <div style={cm.box}>
-        <div style={cm.titleRow}>
-          <span style={cm.titleIcon}>+</span>
-          <h3 style={cm.title}>Create New Election</h3>
-        </div>
-
-        <label style={cm.label}>ELECTION TITLE</label>
-        <input style={cm.input} type="text" placeholder=""
-          value={title} onChange={e => setTitle(e.target.value)} />
-
-        <div style={cm.dateRow}>
-          <div style={{ flex: 1 }}>
-            <label style={cm.label}>START DATE</label>
-            <input style={cm.input} type="datetime-local"
-              value={startDate} onChange={e => setStartDate(e.target.value)} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <label style={cm.label}>END DATE</label>
-            <input style={cm.input} type="datetime-local"
-              value={endDate} onChange={e => setEndDate(e.target.value)} />
-          </div>
-        </div>
-
-        <label style={cm.label}>CANDIDATES</label>
-        {rows.map((row, idx) => (
-          <div key={idx} style={cm.candidateRow}>
-            <div style={cm.photoBox}>
-              {row.photo
-                ? <img src={row.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} />
-                : <span style={{ fontSize: '1.4rem', color: '#8899AA' }}>👤</span>}
-            </div>
-            <input style={{ ...cm.input, flex: 1, marginBottom: 0 }} type="text" placeholder="Name"
-              value={row.name} onChange={e => updateRow(idx, 'name', e.target.value)} />
-            <input style={{ ...cm.input, flex: 1, marginBottom: 0, fontSize: '0.85rem', color: '#8899AA' }}
-              type="text" placeholder="Photo URL (optional)"
-              value={row.photo} onChange={e => updateRow(idx, 'photo', e.target.value)} />
-            {rows.length > 2 && (
-              <button onClick={() => removeRow(idx)} style={cm.removeBtn}>✕</button>
-            )}
-          </div>
-        ))}
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <button onClick={addRow} disabled={rows.length >= 20} style={{ ...cm.addCandidateBtn, opacity: rows.length >= 20 ? 0.4 : 1, cursor: rows.length >= 20 ? 'not-allowed' : 'pointer' }}>+ Add Candidate</button>
-          <span style={{ fontSize: '0.78rem', color: rows.length >= 20 ? '#FF6B6B' : '#8899AA' }}>
-            {rows.length}/20 {rows.length >= 20 ? '— Maximum reached' : ''}
-          </span>
-        </div>
-
-        {error && <div style={{ color: '#FF6B6B', fontSize: '0.85rem', margin: '0.5rem 0' }}>{error}</div>}
-
-        <div style={cm.btnRow}>
-          <button onClick={onClose} style={cm.cancelBtn}>Cancel</button>
-          <button onClick={handleCreate} disabled={saving} style={cm.createBtn}>
-            {saving ? 'Creating...' : 'Create Election'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const cm = {
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' },
-  box: { background: '#13111e', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', padding: '2rem', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto' },
-  titleRow: { display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem' },
-  titleIcon: { fontSize: '1.4rem', color: '#7B61FF', fontWeight: 900 },
-  title: { margin: 0, color: '#7B61FF', fontSize: '1.2rem', fontWeight: 700 },
-  label: { display: 'block', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.1em', color: '#8899AA', marginBottom: '0.4rem', marginTop: '0.8rem' },
-  input: { width: '100%', padding: '0.8rem 1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: '#1a1828', color: '#E6EEF8', fontSize: '0.95rem', boxSizing: 'border-box', outline: 'none', marginBottom: '0.5rem' },
-  textarea: { width: '100%', padding: '0.8rem 1rem', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.08)', background: '#1a1828', color: '#E6EEF8', fontSize: '0.95rem', boxSizing: 'border-box', outline: 'none', resize: 'vertical', fontFamily: 'inherit', marginBottom: '0.5rem' },
-  dateRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' },
-  candidateRow: { display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.6rem' },
-  photoBox: { width: '44px', height: '44px', borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#1a1828' },
-  removeBtn: { background: 'none', border: 'none', color: '#FF6B6B', cursor: 'pointer', fontSize: '1rem', padding: '0.3rem' },
-  addCandidateBtn: { background: 'none', border: 'none', color: '#7B61FF', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 600, padding: '0.3rem 0', marginTop: '0.3rem' },
-  btnRow: { display: 'flex', gap: '1rem', marginTop: '1.5rem' },
-  cancelBtn: { flex: 1, padding: '0.9rem', background: 'none', border: '1px solid rgba(255,255,255,0.1)', color: '#8899AA', borderRadius: '10px', cursor: 'pointer', fontWeight: 600, fontSize: '0.95rem' },
-  createBtn: { flex: 1, padding: '0.9rem', background: 'linear-gradient(135deg, #7B61FF, #6848ff)', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', boxShadow: '0 4px 16px rgba(123,97,255,0.4)' }
-};
-
-// Convert UTC ISO string to datetime-local input value (in IST)
-function toDatetimeLocal(isoStr) {
-  if (!isoStr) return '';
-  const d = new Date(isoStr);
-  // shift to IST (+5:30)
-  const ist = new Date(d.getTime() + (5.5 * 60 * 60 * 1000));
-  return ist.toISOString().slice(0, 16);
-}
-
-function EditModal({ election, token, onClose, onSaved }) {
-  const [name, setName] = useState(election.name);
-  const [startDate, setStartDate] = useState(toDatetimeLocal(election.start_time));
-  const [endDate, setEndDate] = useState(toDatetimeLocal(election.end_time));
-  const [rows, setRows] = useState(
-    election.candidates.map((c, i) => ({
-      name: c,
-      photo: (election.candidate_photos && election.candidate_photos[i]) || ''
-    }))
-  );
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const updateRow = (idx, field, value) => {
-    const updated = [...rows];
-    updated[idx][field] = value;
-    setRows(updated);
-  };
-  const addRow = () => rows.length < 20 && setRows([...rows, { name: '', photo: '' }]);
-  const removeRow = (idx) => rows.length > 2 && setRows(rows.filter((_, i) => i !== idx));
-
-  const save = async () => {
-    const validRows = rows.filter(r => r.name.trim());
-    if (!name.trim() || validRows.length < 2) { setError('Need election name and at least 2 candidates.'); return; }
-    if (endDate && startDate && new Date(endDate) <= new Date(startDate)) { setError('End date must be after start date.'); return; }
-    setSaving(true); setError('');
-    try {
-      await api.put(`/admin/election/${election.id}`, {
-        name: name.trim(),
-        candidates: validRows.map(r => r.name.trim()),
-        candidate_photos: validRows.map(r => r.photo.trim()),
-        start_time: startDate ? new Date(startDate).toISOString() : null,
-        end_time: endDate ? new Date(endDate).toISOString() : null,
-      }, { headers: { Authorization: `Bearer ${token}` } });
-      onSaved(); onClose();
-    } catch (err) {
-      setError(err.response?.data?.error || 'Failed to save');
-    } finally { setSaving(false); }
-  };
-
-  return (
-    <div style={modal.overlay}>
-      <div style={modal.box}>
-        <div style={modal.header}>
-          <h3 style={{ margin: 0, color: '#E6EEF8' }}>✏️ Edit Election</h3>
-          <button onClick={onClose} style={modal.closeBtn}>✕</button>
-        </div>
-        <input style={modal.input} type="text" placeholder="Election name" value={name} onChange={e => setName(e.target.value)} />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem', marginBottom: '0.8rem' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.1em', color: '#8899AA', marginBottom: '0.4rem' }}>START DATE</label>
-            <input style={{ ...modal.input, marginBottom: 0 }} type="datetime-local" value={startDate} onChange={e => setStartDate(e.target.value)} />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.1em', color: '#8899AA', marginBottom: '0.4rem' }}>END DATE</label>
-            <input style={{ ...modal.input, marginBottom: 0 }} type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} />
-          </div>
-        </div>
-        <div style={{ marginBottom: '0.8rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-            <span style={{ color: '#E6EEF8', fontWeight: 700 }}>Candidates</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.8rem' }}>
-                <button onClick={addRow} disabled={rows.length >= 20} style={{ ...modal.addBtn, opacity: rows.length >= 20 ? 0.4 : 1, cursor: rows.length >= 20 ? 'not-allowed' : 'pointer' }}>+ Add</button>
-                <span style={{ fontSize: '0.75rem', color: rows.length >= 20 ? '#FF6B6B' : '#8899AA' }}>{rows.length}/20{rows.length >= 20 ? ' — Max' : ''}</span>
-              </div>
-          </div>
-          {rows.map((row, idx) => (
-            <div key={idx} style={modal.candidateRow}>
-              <div style={modal.photoPreview}>
-                {row.photo
-                  ? <img src={row.photo} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none'; }} />
-                  : <span style={{ fontSize: '1.2rem' }}>👤</span>}
-              </div>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                <input style={modal.smallInput} type="text" placeholder="Candidate name" value={row.name} onChange={e => updateRow(idx, 'name', e.target.value)} />
-                <input style={{ ...modal.smallInput, color: '#8899AA' }} type="text" placeholder="Photo URL (optional)" value={row.photo} onChange={e => updateRow(idx, 'photo', e.target.value)} />
-              </div>
-              {rows.length > 2 && <button onClick={() => removeRow(idx)} style={modal.removeBtn}>✕</button>}
-            </div>
-          ))}
-        </div>
-        {error && <div style={{ color: '#FF6B6B', fontSize: '0.85rem', marginBottom: '0.5rem' }}>{error}</div>}
-        <div style={{ display: 'flex', gap: '0.8rem' }}>
-          <button onClick={save} disabled={saving} style={modal.saveBtn}>{saving ? 'Saving...' : '💾 Save Changes'}</button>
-          <button onClick={onClose} style={modal.cancelBtn}>Cancel</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const modal = {
-  overlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' },
-  box: { background: '#0F1725', border: '1px solid #263250', borderRadius: '16px', padding: '1.5rem', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' },
-  closeBtn: { background: 'none', border: 'none', color: '#8899AA', fontSize: '1.2rem', cursor: 'pointer' },
-  input: { width: '100%', padding: '0.8rem', marginBottom: '0.8rem', borderRadius: '10px', border: '1px solid #2C3958', background: '#162033', color: '#E6EEF8', boxSizing: 'border-box' },
-  candidateRow: { display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem', background: '#162033', border: '1px solid #2C3958', borderRadius: '10px', padding: '0.5rem' },
-  photoPreview: { width: '48px', height: '48px', borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '2px solid #2C3958', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0F1725' },
-  smallInput: { width: '100%', padding: '0.5rem 0.7rem', borderRadius: '8px', border: '1px solid #2C3958', background: '#0F1725', color: '#E6EEF8', boxSizing: 'border-box', fontSize: '0.9rem' },
-  addBtn: { padding: '0.3rem 0.7rem', background: '#1B2537', color: '#6CA2FF', border: '1px solid #6CA2FF44', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.82rem' },
-  removeBtn: { background: 'none', border: 'none', color: '#FF6B6B', cursor: 'pointer' },
-  saveBtn: { flex: 1, padding: '0.85rem', background: '#6CA2FF', color: '#0B101A', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 700 },
-  cancelBtn: { padding: '0.85rem 1.2rem', background: '#1B2537', color: '#E6EEF8', border: '1px solid #2C3958', borderRadius: '10px', cursor: 'pointer', fontWeight: 700 }
-};
-
-function AdminPanel({ token }) {
-  const [elections, setElections] = useState([]);
-  const [pendingVoters, setPendingVoters] = useState([]);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const [expandedId, setExpandedId] = useState(null);
-  const [voterStatusId, setVoterStatusId] = useState(null);
-  const [editingElection, setEditingElection] = useState(null);
-  const [showCreate, setShowCreate] = useState(false);
-  const [showVoters, setShowVoters] = useState(false);
+function Login({ onLogin }) {
+  const [tab, setTab]           = useState('voter'); // 'voter' | 'admin'
+  const [phone, setPhone]       = useState('');
+  const [email, setEmail]       = useState('');
+  const [password, setPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [otp, setOtp]           = useState('');
+  const [otpSent, setOtpSent]   = useState(false);
+  const [sending, setSending]   = useState(false);
+  const [msg, setMsg]           = useState('');
+  const [error, setError]       = useState('');
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchElections();
-    fetchPendingVoters();
-    const interval = setInterval(() => { fetchElections(); fetchPendingVoters(); }, 10000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const fetchElections = async () => {
+  const handleVoterLogin = async (e) => {
+    e.preventDefault();
+    setMsg(''); setError('');
     try {
-      const res = await api.get('/elections', { headers: { Authorization: `Bearer ${token}` } });
-      setElections(res.data);
-    } catch {}
-  };
-
-  const fetchPendingVoters = async () => {
-    try {
-      const res = await api.get('/admin/pending-voters', { headers: { Authorization: `Bearer ${token}` } });
-      setPendingVoters(res.data);
-    } catch {}
-  };
-
-  const approveVoter = async (id) => {
-    try {
-      await api.post(`/admin/approve-voter/${id}`, {}, { headers: { Authorization: `Bearer ${token}` } });
-      setMessage('Voter approved successfully!');
-      fetchPendingVoters();
-    } catch (err) { setError(err.response?.data?.error || 'Failed to approve'); }
-  };
-
-  const rejectVoter = async (id, name) => {
-    if (!window.confirm(`Reject and remove ${name}?`)) return;
-    try {
-      await api.delete(`/admin/reject-voter/${id}`, { headers: { Authorization: `Bearer ${token}` } });
-      setMessage('Voter rejected and removed.');
-      fetchPendingVoters();
-    } catch (err) { setError(err.response?.data?.error || 'Failed to reject'); }
-  };
-
-  const deleteElection = async (electionId) => {
-    if (!window.confirm(`Delete election ${electionId}? This cannot be undone.`)) return;
-    setError(''); setMessage('');
-    try {
-      await api.delete(`/admin/election/${electionId}`, { headers: { Authorization: `Bearer ${token}` } });
-      setMessage(`Election ${electionId} deleted`);
-      fetchElections();
+      const res = await api.post('/auth', { phone: `+91${phone.trim()}`, password, otp: otp.trim() });
+      const { token, user } = res.data;
+      onLogin(user, token);
+      navigate('/voter');
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to delete election');
+      setError(err.response?.data?.error || 'Sign-in failed.');
     }
   };
 
-  const autoTally = async (electionId) => {
-    setError(''); setMessage('');
+  const requestOtp = async () => {
+    setMsg(''); setError('');
+    const ph = phone.trim();
+    if (!ph || ph.length !== 10) { setError('Enter a valid 10-digit phone number first.'); return; }
+    setSending(true);
     try {
-      await api.post(`/admin/tally-auto/${electionId}`, {}, { headers: { Authorization: `Bearer ${token}` } });
-      setMessage(`Election ${electionId} tallied! Click "View Results".`);
-      fetchElections();
+      await api.post('/request-otp', { phone: `+91${ph}` });
+      setOtpSent(true);
+      setMsg('OTP sent! Check your phone or terminal.');
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to tally');
+      setError(err.response?.data?.error || 'Could not send OTP.');
+    } finally { setSending(false); }
+  };
+
+  const handleAdminLogin = async (e) => {
+    e.preventDefault();
+    setMsg(''); setError('');
+    try {
+      const res = await api.post('/admin-login', { email: email.trim(), password });
+      const { token, user } = res.data;
+      onLogin(user, token);
+      navigate('/admin');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Admin sign-in failed.');
     }
   };
 
-  const isVotingEnded = (e) => !e.end_time || new Date() > new Date(e.end_time);
-  const toggleExpand = (id) => setExpandedId(expandedId === id ? null : id);
-  const toggleVoterStatus = (id) => setVoterStatusId(voterStatusId === id ? null : id);
 
   return (
-    <div style={styles.container}>
+    <div className="lg-root">
       <style>{`
-        input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-          filter: brightness(0) invert(1) sepia(1) saturate(10) hue-rotate(175deg) brightness(2);
-          opacity: 1; cursor: pointer; width: 18px; height: 18px;
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600&display=swap');
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        .lg-root {
+          min-height: 100vh; width: 100vw; background: #020b1a;
+          display: flex; align-items: center; justify-content: center;
+          font-family: 'Rajdhani', sans-serif; position: relative; overflow: hidden;
         }
+        .lg-root::before {
+          content: ''; position: fixed; inset: 0;
+          background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px);
+          pointer-events: none; z-index: 0;
+        }
+        .lg-blob1 { position: fixed; width: 500px; height: 500px; border-radius: 50%; background: radial-gradient(circle, rgba(0,102,255,0.07) 0%, transparent 70%); top: -120px; left: -120px; pointer-events: none; z-index: 0; }
+        .lg-blob2 { position: fixed; width: 400px; height: 400px; border-radius: 50%; background: radial-gradient(circle, rgba(0,229,255,0.05) 0%, transparent 70%); bottom: -100px; right: -100px; pointer-events: none; z-index: 0; }
+        .lg-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; display: flex; align-items: center; justify-content: flex-end; padding: 1rem 2rem; background: rgba(2,11,26,0.7); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(0,229,255,0.10); }
+        .lg-back { font-family: 'Orbitron', monospace; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.12em; padding: 0.45rem 1.2rem; border-radius: 3px; cursor: pointer; text-transform: uppercase; transition: all 0.25s ease; background: transparent; border: 1px solid rgba(0,229,255,0.4); color: #00e5ff; text-decoration: none; }
+        .lg-back:hover { background: rgba(0,229,255,0.08); box-shadow: 0 0 16px rgba(0,229,255,0.3); }
+        .lg-card { position: relative; z-index: 10; width: 100%; max-width: 460px; padding: 2.5rem 2.8rem; background: rgba(0,18,45,0.75); border: 1px solid rgba(0,229,255,0.18); backdrop-filter: blur(16px); animation: lg-fadeUp 0.8s ease both; margin-top: 3rem; }
+        .lg-c { position: absolute; width: 18px; height: 18px; border-color: #00e5ff; border-style: solid; }
+        .lg-c-tl { top:-1px; left:-1px; border-width:2px 0 0 2px; }
+        .lg-c-tr { top:-1px; right:-1px; border-width:2px 2px 0 0; }
+        .lg-c-bl { bottom:-1px; left:-1px; border-width:0 0 2px 2px; }
+        .lg-c-br { bottom:-1px; right:-1px; border-width:0 2px 2px 0; }
+        .lg-card-label { position: absolute; top: -0.65rem; left: 50%; transform: translateX(-50%); font-family: 'Orbitron', monospace; font-size: 0.48rem; letter-spacing: 0.28em; color: #00e5ff; background: #020b1a; padding: 0 0.8rem; white-space: nowrap; opacity: 0.75; }
+        .lg-title { font-family: 'Orbitron', monospace; font-size: 1.4rem; font-weight: 900; color: #fff; letter-spacing: 0.06em; text-align: center; text-shadow: 0 0 20px rgba(0,229,255,0.3); margin-bottom: 1.2rem; }
+        .lg-tabs { display: flex; gap: 0; margin-bottom: 1.5rem; border: 1px solid rgba(0,229,255,0.2); border-radius: 6px; overflow: hidden; }
+        .lg-tab { flex: 1; padding: 0.65rem; font-family: 'Orbitron', monospace; font-size: 0.58rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer; border: none; transition: all 0.2s ease; }
+        .lg-tab-active { background: rgba(0,229,255,0.15); color: #00e5ff; }
+        .lg-tab-inactive { background: transparent; color: rgba(0,229,255,0.35); }
+        .lg-tab-inactive:hover { background: rgba(0,229,255,0.05); color: rgba(0,229,255,0.6); }
+        .lg-field { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 1rem; }
+        .lg-field label { font-family: 'Orbitron', monospace; font-size: 0.52rem; letter-spacing: 0.2em; color: rgba(0,229,255,0.6); text-transform: uppercase; }
+        .lg-field input { background: rgba(0,30,70,0.6); border: 1px solid rgba(0,229,255,0.2); color: #e0f4ff; font-family: 'Rajdhani', sans-serif; font-size: 1rem; padding: 0.75rem 1rem; outline: none; transition: all 0.25s ease; border-radius: 2px; letter-spacing: 0.04em; width: 100%; }
+        .lg-field input::placeholder { color: rgba(180,220,255,0.25); }
+        .lg-field input:focus { border-color: rgba(0,229,255,0.6); background: rgba(0,40,90,0.6); box-shadow: 0 0 16px rgba(0,229,255,0.12); }
+        .lg-pass-wrap { position: relative; }
+        .lg-pass-wrap .lg-field input { padding-right: 3.5rem; }
+        .lg-pass-wrap input::-ms-reveal,
+        .lg-pass-wrap input::-ms-clear,
+        .lg-pass-wrap input::-webkit-credentials-auto-fill-button,
+        .lg-pass-wrap input::-webkit-contacts-auto-fill-button { display: none !important; }
+        .lg-eye { position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: rgba(0,229,255,0.5); padding: 0.2rem; display: flex; align-items: center; transition: color 0.2s; }
+        .lg-eye:hover { color: #00e5ff; }
+        .lg-otp-row { display: flex; align-items: flex-end; gap: 0.8rem; }
+        .lg-otp-row .lg-field { flex: 1; margin-bottom: 0; min-width: 0; }
+        .lg-otp-row .lg-field input { min-width: 0; width: 100%; letter-spacing: 0.2em; font-size: 1.1rem; }
+        .lg-send-btn { font-family: 'Orbitron', monospace; font-size: 0.52rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 0.75rem 1rem; border: 1px solid rgba(0,229,255,0.4); color: #00e5ff; background: rgba(0,229,255,0.05); cursor: pointer; transition: all 0.25s ease; border-radius: 2px; white-space: nowrap; flex-shrink: 0; height: fit-content; }
+        .lg-send-btn:hover:not(:disabled) { background: rgba(0,229,255,0.1); box-shadow: 0 0 14px rgba(0,229,255,0.25); }
+        .lg-send-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+        .lg-sent-badge { font-size: 0.75rem; color: #00e5ff; opacity: 0.6; margin-top: 0.25rem; font-family: 'Rajdhani', sans-serif; }
+        .lg-msg-success { font-size: 0.82rem; color: #00e5ff; background: rgba(0,229,255,0.07); border: 1px solid rgba(0,229,255,0.2); padding: 0.6rem 0.9rem; margin-bottom: 0.8rem; letter-spacing: 0.03em; border-radius: 2px; }
+        .lg-msg-error { font-size: 0.82rem; color: #ff6b6b; background: rgba(255,107,107,0.07); border: 1px solid rgba(255,107,107,0.25); padding: 0.6rem 0.9rem; margin-bottom: 0.8rem; letter-spacing: 0.03em; border-radius: 2px; }
+        .lg-submit { width: 100%; padding: 0.95rem; font-family: 'Orbitron', monospace; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; cursor: pointer; border: 1px solid rgba(0,229,255,0.5); color: #00e5ff; background: rgba(0,229,255,0.06); transition: all 0.3s ease; border-radius: 2px; margin-top: 0.4rem; }
+        .lg-submit:hover { background: rgba(0,229,255,0.12); box-shadow: 0 0 28px rgba(0,229,255,0.35), inset 0 0 16px rgba(0,229,255,0.05); transform: translateY(-1px); }
+        .lg-footer { position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; text-align: center; padding: 0.8rem; font-family: 'Orbitron', monospace; font-size: 0.48rem; letter-spacing: 0.18em; color: rgba(0,229,255,0.2); border-top: 1px solid rgba(0,229,255,0.06); background: rgba(2,11,26,0.7); backdrop-filter: blur(10px); }
+        @keyframes lg-fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
-      {showCreate && (
-        <CreateElectionModal
-          token={token}
-          onClose={() => setShowCreate(false)}
-          onCreated={() => { fetchElections(); setMessage('Election created successfully!'); }}
-        />
-      )}
-      {editingElection && (
-        <EditModal
-          election={editingElection}
-          token={token}
-          onClose={() => setEditingElection(null)}
-          onSaved={() => { fetchElections(); setMessage('Election updated successfully!'); }}
-        />
-      )}
 
-      <div style={styles.topBar}>
-        <h2 style={{ margin: 0 }}>Admin Panel</h2>
-        <button onClick={() => setShowCreate(true)} style={styles.createBtn}>+ Create Election</button>
-      </div>
+      <div className="lg-blob1" />
+      <div className="lg-blob2" />
+      <nav className="lg-nav">
+        <Link to="/" className="lg-back">← Back to Home</Link>
+      </nav>
 
-      {/* Voter Approval Section */}
-      <div style={{ ...styles.section, marginBottom: '1.5rem' }}>
-        <div
-          onClick={() => setShowVoters(v => !v)}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}
-        >
-          <h3 style={{ margin: 0 }}>
-            👥 Voter Registrations
-            {pendingVoters.filter(v => !v.approved).length > 0 && (
-              <span style={{ marginLeft: '0.6rem', background: '#FF6B6B', color: '#fff', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 700, padding: '0.15rem 0.5rem' }}>
-                {pendingVoters.filter(v => !v.approved).length} pending
-              </span>
-            )}
-          </h3>
-          <span style={{ color: '#6CA2FF', fontSize: '0.85rem', fontWeight: 600 }}>
-            {showVoters ? '▲ Hide' : '▼ Show'}
-          </span>
+      <div className="lg-card">
+        <span className="lg-c lg-c-tl" /><span className="lg-c lg-c-tr" />
+        <span className="lg-c lg-c-bl" /><span className="lg-c lg-c-br" />
+        <div className="lg-card-label">// SECURE ACCESS</div>
+        <div className="lg-title">Sign In</div>
+
+        {/* Tabs */}
+        <div className="lg-tabs">
+          <button className={`lg-tab ${tab === 'voter' ? 'lg-tab-active' : 'lg-tab-inactive'}`} onClick={() => { setTab('voter'); setMsg(''); setError(''); }}>
+            🗳️ Voter
+          </button>
+          <button className={`lg-tab ${tab === 'admin' ? 'lg-tab-active' : 'lg-tab-inactive'}`} onClick={() => { setTab('admin'); setMsg(''); setError(''); }}>
+            🔐 Admin
+          </button>
         </div>
-        {showVoters && (pendingVoters.length === 0 ? (
-          <div style={{ ...styles.emptyState, marginTop: '1rem' }}><p style={{ color: '#8899AA', margin: 0 }}>No registered voters yet.</p></div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-              <thead>
-                <tr>
-                  {['Name', 'Phone', 'Voter ID', 'DOB', 'Status', 'Actions'].map(h => (
-                    <th key={h} style={{ textAlign: 'left', padding: '0.5rem 0.8rem', color: '#6CA2FF', fontWeight: 700, borderBottom: '1px solid #263250', whiteSpace: 'nowrap' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {pendingVoters.map(v => (
-                  <tr key={v.id} style={{ borderBottom: '1px solid #1E2B44' }}>
-                    <td style={{ padding: '0.5rem 0.8rem', color: '#E6EEF8' }}>{v.name}</td>
-                    <td style={{ padding: '0.5rem 0.8rem', color: '#E6EEF8' }}>{v.phone || '—'}</td>
-                    <td style={{ padding: '0.5rem 0.8rem', color: '#E6EEF8' }}>{v.voter_id || '—'}</td>
-                    <td style={{ padding: '0.5rem 0.8rem', color: '#E6EEF8' }}>{v.dob || '—'}</td>
-                    <td style={{ padding: '0.5rem 0.8rem' }}>
-                      {v.approved
-                        ? <span style={{ background: '#1B3A2F', color: '#8CFAC7', border: '1px solid #2E6B50', padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 700 }}>✅ Approved</span>
-                        : <span style={{ background: '#2A2000', color: '#FFA726', border: '1px solid #7A5200', padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 700 }}>⏳ Pending</span>
-                      }
-                    </td>
-                    <td style={{ padding: '0.5rem 0.8rem' }}>
-                      <div style={{ display: 'flex', gap: '0.4rem' }}>
-                        {!v.approved && (
-                          <button onClick={() => approveVoter(v.id)} style={{ padding: '0.3rem 0.7rem', background: '#3EB489', color: '#0B101A', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.78rem' }}>
-                            ✓ Approve
-                          </button>
-                        )}
-                        <button onClick={() => rejectVoter(v.id, v.name)} style={{ padding: '0.3rem 0.7rem', background: '#FF6B6B', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, fontSize: '0.78rem' }}>
-                          ✕ Remove
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ))}
-      </div>
 
-      <div style={styles.section}>
-        <h3>Manage Elections</h3>
-        {elections.length === 0 && (
-          <div style={styles.emptyState}>
-            <p style={{ color: '#8899AA', margin: 0 }}>No elections yet. Click "+ Create Election" to get started.</p>
-          </div>
-        )}
-        {elections.map(e => (
-          <div key={e.id} style={styles.electionCard}>
-            <div style={{ flex: 1 }}>
-              <div style={styles.electionRow}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  <strong>ID: {e.id}</strong> — {e.name}
-                  <span style={{
-                    ...styles.statusBadge,
-                    background: e.status === 'active' ? '#1B3A2F' : '#2A2000',
-                    color: e.status === 'active' ? '#8CFAC7' : '#FFA726',
-                    border: `1px solid ${e.status === 'active' ? '#2E6B50' : '#7A5200'}`
-                  }}>{e.status.toUpperCase()}</span>
-                </div>
-                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                  <button onClick={() => toggleExpand(e.id)} style={styles.buttonLive}>
-                    {expandedId === e.id ? '▲ Hide' : '📊 Live Count'}
-                  </button>
-                  <button onClick={() => toggleVoterStatus(e.id)} style={styles.buttonVoters}>
-                    {voterStatusId === e.id ? '▲ Hide Voters' : '👥 Who Voted'}
-                  </button>
-                  {e.status === 'active' && (
-                    <button onClick={() => setEditingElection(e)} style={styles.buttonEdit}>✏️ Edit</button>
-                  )}
-                  {e.status === 'active' && isVotingEnded(e) && (
-                    <button onClick={() => autoTally(e.id)} style={styles.buttonSuccess}>Tally</button>
-                  )}
-                  {e.status === 'tallied' && (
-                    <button onClick={() => navigate(`/results/${e.id}`)} style={styles.buttonInfo}>View Results</button>
-                  )}
-                  <button onClick={() => deleteElection(e.id)} style={styles.buttonDanger}>Delete</button>
-                </div>
+        {/* Voter Login */}
+        {tab === 'voter' && (
+          <form onSubmit={handleVoterLogin} autoComplete="off">
+            {/* Dummy fields to prevent browser save-password prompt */}
+            <input type="text" name="username" style={{ display: 'none' }} readOnly />
+            <input type="password" name="password" style={{ display: 'none' }} readOnly />
+            <div className="lg-field">
+              <label>Phone Number</label>
+              <div style={{ display: 'flex', alignItems: 'stretch' }}>
+                <span style={{ padding: '0.75rem 0.9rem', background: 'rgba(0,229,255,0.08)', border: '1px solid rgba(0,229,255,0.2)', borderRight: 'none', borderRadius: '2px 0 0 2px', color: '#00e5ff', fontFamily: "'Rajdhani', sans-serif", fontSize: '1rem', userSelect: 'none', whiteSpace: 'nowrap' }}>+91</span>
+                <input
+                  type="tel" inputMode="numeric" autoComplete="tel-national"
+                  placeholder="" maxLength={10}
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                  style={{ borderRadius: '0 2px 2px 0', flex: 1 }}
+                  required
+                />
               </div>
-
-              <div style={{ display: 'flex', gap: '0.6rem', marginTop: '0.6rem', flexWrap: 'wrap' }}>
-                {e.candidates.map((c, i) => {
-                  const photo = e.candidate_photos && e.candidate_photos[i];
-                  return (
-                    <div key={i} style={styles.candidateChipWithPhoto}>
-                      {photo
-                        ? <img src={photo} alt={c} style={styles.chipPhoto} onError={ev => { ev.target.style.display = 'none'; }} />
-                        : <div style={styles.chipPhotoPlaceholder}>👤</div>}
-                      <span style={{ fontSize: '0.78rem', color: '#A0B4D0' }}>{c}</span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {e.end_time && e.status === 'active' && (
-                <div style={{ fontSize: '0.82rem', color: isVotingEnded(e) ? '#8CFAC7' : '#FFA726', marginTop: '0.4rem' }}>
-                  {isVotingEnded(e) ? '✅ Voting ended — ready to tally' : `⏰ Ends: ${new Date(e.end_time).toLocaleString()}`}
-                </div>
-              )}
-
-              {expandedId === e.id && <LiveResults electionId={e.id} token={token} />}
-              {voterStatusId === e.id && <VoterStatus electionId={e.id} token={token} />}
             </div>
-          </div>
-        ))}
+            <div className="lg-field">
+              <label>Password</label>
+              <div className="lg-pass-wrap" style={{ position: 'relative' }}>
+                <input type={showPass ? 'text' : 'password'} autoComplete="off" data-form-type="other" name="voter-secret"
+                  placeholder="" style={{ paddingRight: '3rem' }}
+                  value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <button type="button" className="lg-eye" onClick={() => setShowPass(p => !p)} aria-label="Toggle password">
+                  {showPass
+                    ? <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    : <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  }
+                </button>
+              </div>
+            </div>
+            <div className="lg-otp-row" style={{ marginBottom: '1rem' }}>
+              <div className="lg-field">
+                <label>One-Time Code</label>
+                <input type="text" inputMode="numeric" autoComplete="one-time-code"
+                  placeholder="" maxLength={8}
+                  value={otp} onChange={(e) => setOtp(e.target.value)} required />
+                {otpSent && <div className="lg-sent-badge">✓ OTP sent to your phone</div>}
+              </div>
+              <button type="button" className="lg-send-btn" onClick={requestOtp} disabled={sending}>
+                {sending ? 'Sending…' : otpSent ? 'Resend' : 'Send OTP'}
+              </button>
+            </div>
+            {msg   && <div className="lg-msg-success">{msg}</div>}
+            {error && <div className="lg-msg-error">{error}</div>}
+            <button type="submit" className="lg-submit">Sign In as Voter</button>
+          </form>
+        )}
+
+        {/* Admin Login */}
+        {tab === 'admin' && (
+          <form onSubmit={handleAdminLogin} autoComplete="off">
+            <input type="text" name="username" style={{ display: 'none' }} readOnly />
+            <input type="password" name="password" style={{ display: 'none' }} readOnly />
+            <div className="lg-field">
+              <label>Admin Email</label>
+              <input type="email" autoComplete="email" placeholder=""
+                value={email} onChange={(e) => setEmail(e.target.value)} required />
+            </div>
+            <div className="lg-field">
+              <label>Password</label>
+              <input type="password" autoComplete="off" data-form-type="other" name="admin-secret" placeholder=""
+                value={password} onChange={(e) => setPassword(e.target.value)} required />
+            </div>
+            {msg   && <div className="lg-msg-success">{msg}</div>}
+            {error && <div className="lg-msg-error">{error}</div>}
+            <button type="submit" className="lg-submit">Sign In as Admin</button>
+          </form>
+        )}
       </div>
 
-      {message && <p style={styles.success}>{message}</p>}
-      {error && <p style={styles.error}>{error}</p>}
+      <footer className="lg-footer">
+         DECENTRALIZED VOTING PROTOCOL — ALL TRANSACTIONS CRYPTOGRAPHICALLY SECURED
+      </footer>
     </div>
   );
 }
 
-const styles = {
-  container: { background: '#0F1725', color: '#E6EEF8', padding: '2rem', borderRadius: '12px', maxWidth: '960px', margin: '0 auto', boxShadow: '0 8px 24px rgba(0,0,0,0.35)' },
-  topBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' },
-  createBtn: { padding: '0.8rem 1.5rem', background: 'linear-gradient(135deg, #7B61FF, #6848ff)', color: '#fff', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.95rem', boxShadow: '0 4px 16px rgba(123,97,255,0.4)' },
-  section: { background: '#162033', border: '1px solid #263250', borderRadius: '12px', padding: '1.2rem' },
-  emptyState: { background: '#0F1725', border: '1px dashed #2C3958', borderRadius: '10px', padding: '2rem', textAlign: 'center' },
-  electionCard: { display: 'flex', padding: '0.9rem', background: '#0F1725', border: '1px solid #2C3958', borderRadius: '8px', marginBottom: '0.6rem' },
-  electionRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' },
-  statusBadge: { padding: '0.15rem 0.6rem', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 700 },
-  candidateChipWithPhoto: { display: 'flex', alignItems: 'center', gap: '0.4rem', background: '#162033', border: '1px solid #2C3958', borderRadius: '999px', padding: '0.2rem 0.7rem 0.2rem 0.2rem' },
-  chipPhoto: { width: '24px', height: '24px', borderRadius: '50%', objectFit: 'cover' },
-  chipPhotoPlaceholder: { width: '24px', height: '24px', borderRadius: '50%', background: '#1E2B44', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.8rem' },
-  buttonLive: { padding: '0.6rem 0.9rem', background: '#1B2B44', color: '#6CA2FF', border: '1px solid #6CA2FF44', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' },
-  buttonVoters: { padding: '0.6rem 0.9rem', background: '#1B3A2F', color: '#8CFAC7', border: '1px solid #2E6B5044', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' },
-  buttonEdit: { padding: '0.6rem 0.9rem', background: '#2A1F00', color: '#FFA726', border: '1px solid #FFA72644', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' },
-  buttonDanger: { padding: '0.6rem 0.9rem', background: '#FF6B6B', color: '#0B101A', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' },
-  buttonSuccess: { padding: '0.6rem 0.9rem', background: '#3EB489', color: '#0B101A', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' },
-  buttonInfo: { padding: '0.6rem 0.9rem', background: '#FFA726', color: '#0B101A', border: 'none', borderRadius: '10px', cursor: 'pointer', fontWeight: 700, fontSize: '0.85rem' },
-  success: { color: '#8CFAC7', marginTop: '0.6rem' },
-  error: { color: '#FF8686', marginTop: '0.6rem' },
-};
-
-export default AdminPanel;
+export default Login;

@@ -37,6 +37,8 @@ jwt = JWTManager(app)
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.abspath(os.path.join(HERE, '..', '..'))
 DATABASE_DIR = os.path.join(ROOT_DIR, 'database')
+os.makedirs(DATABASE_DIR, exist_ok=True)
+
 BULLETIN_FILE = os.path.join(DATABASE_DIR, 'bulletin.json')
 TRUSTEE_FILE = os.path.join(DATABASE_DIR, 'trustee_keys.json')
 
@@ -751,6 +753,49 @@ def get_pending_voters():
     return jsonify(voters), 200
 
 
+
+import csv as _csv_module
+import tempfile
+import shutil
+
+def _safe_csv_write(csv_path, rows):
+    """Write CSV safely using temp file to avoid OneDrive/file-lock issues."""
+    tmp_path = csv_path + '.tmp'
+    with open(tmp_path, 'w', newline='', encoding='utf-8') as f:
+        _csv_module.writer(f, lineterminator='\r\n').writerows(rows)
+    os.replace(tmp_path, csv_path)
+
+def _csv_add_voter(csv_path, name, phone, voter_id, dob):
+    """Append voter to CSV, avoiding duplicates."""
+    def norm(p):
+        return p.strip().replace(' ', '').replace('-', '').replace('+91', '').lstrip('0')
+    rows = []
+    if os.path.exists(csv_path):
+        with open(csv_path, 'r', newline='', encoding='utf-8') as f:
+            rows = list(_csv_module.reader(f))
+    for r in rows[1:]:
+        if len(r) >= 2 and norm(r[1]) == norm(phone):
+            print(f"CSV: {name} already exists, skipping")
+            return
+    rows.append([name, phone, 'voter', '', '', voter_id or '', dob or ''])
+    _safe_csv_write(csv_path, rows)
+    print(f"CSV: added {name} ({phone})")
+
+def _csv_remove_voter(csv_path, phone):
+    """Remove voter row from CSV by phone."""
+    def norm(p):
+        return p.strip().replace(' ', '').replace('-', '').replace('+91', '').lstrip('0')
+    if not os.path.exists(csv_path):
+        return
+    with open(csv_path, 'r', newline='', encoding='utf-8') as f:
+        rows = list(_csv_module.reader(f))
+    header = rows[0] if rows else []
+    data = rows[1:] if len(rows) > 1 else []
+    norm_phone = norm(phone)
+    filtered = [r for r in data if len(r) < 2 or norm(r[1]) != norm_phone]
+    _safe_csv_write(csv_path, ([header] if header else []) + filtered)
+    print(f"CSV: removed {len(data)-len(filtered)} row(s) for phone {norm_phone}")
+
 @app.route('/admin/approve-voter/<int:user_id>', methods=['POST'])
 @jwt_required()
 def approve_voter(user_id):
@@ -769,38 +814,9 @@ def approve_voter(user_id):
 
     if row:
         try:
-            import csv as csv_module
-            csv_path = os.path.join(DATABASE_DIR, 'users.csv')
-            print(f"CSV PATH: {csv_path}")
             name, phone, voter_id, dob, _ = row
-
-            def norm_phone(p):
-                return p.strip().replace(' ', '').replace('-', '').replace('+91', '').lstrip('0')
-
-            already_exists = False
-            if os.path.exists(csv_path):
-                with open(csv_path, 'r', newline='', encoding='utf-8') as f:
-                    for csv_row in csv_module.DictReader(f):
-                        if norm_phone(csv_row.get('phone', '')) == norm_phone(phone):
-                            already_exists = True
-                            break
-
-            if not already_exists:
-                # Ensure trailing newline
-                if os.path.exists(csv_path):
-                    with open(csv_path, 'rb') as f:
-                        f.seek(0, 2)
-                        if f.tell() > 0:
-                            f.seek(-1, 2)
-                            if f.read(1) != b'\n':
-                                with open(csv_path, 'ab') as fa:
-                                    fa.write(b'\n')
-                with open(csv_path, 'a', newline='', encoding='utf-8') as f:
-                    writer = csv_module.writer(f)
-                    writer.writerow([name, phone, 'voter', '', '', voter_id or '', dob or ''])
-                print(f"CSV: added {name} ({phone})")
-            else:
-                print(f"CSV: {name} ({phone}) already exists, skipping")
+            csv_path = os.path.join(DATABASE_DIR, 'users.csv')
+            _csv_add_voter(csv_path, name, phone, voter_id, dob)
         except Exception as e:
             import traceback
             print(f"CSV ERROR during approve: {e}")
@@ -830,23 +846,7 @@ def reject_voter(user_id):
     # Remove from users.csv
     try:
         csv_path = os.path.join(DATABASE_DIR, 'users.csv')
-        if os.path.exists(csv_path):
-            import csv as csv_mod
-            def norm(p):
-                return p.strip().replace(' ', '').replace('-', '').replace('+91', '').lstrip('0')
-            norm_phone = norm(phone)
-            with open(csv_path, 'r', newline='', encoding='utf-8') as f:
-                all_rows = list(csv_mod.reader(f))
-            header = all_rows[0] if all_rows else []
-            data_rows = all_rows[1:] if len(all_rows) > 1 else []
-            filtered = [r for r in data_rows if len(r) < 2 or norm(r[1]) != norm_phone]
-            removed = len(data_rows) - len(filtered)
-            with open(csv_path, 'w', newline='', encoding='utf-8') as f:
-                writer = csv_mod.writer(f)
-                if header:
-                    writer.writerow(header)
-                writer.writerows(filtered)
-            print(f"CSV: removed {removed} row(s) for phone {norm_phone}")
+        _csv_remove_voter(csv_path, phone)
     except Exception as e:
         import traceback
         print(f"CSV ERROR during reject: {e}")

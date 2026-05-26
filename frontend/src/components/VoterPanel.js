@@ -9,433 +9,208 @@ function VoterPanel({ token, user }) {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchElections();
-    loadVotedIds();
-  }, []);
+  useEffect(() => { fetchElections(); loadVotedIds(); }, []);
 
   const fetchElections = async () => {
     try {
-      const res = await api.get('/elections', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await api.get('/elections', { headers: { Authorization: `Bearer ${token}` } });
       setElections(res.data);
-    } catch {
-      setError('Failed to load elections. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+    } catch { setError('Failed to load elections. Please try again.'); }
+    finally { setLoading(false); }
   };
 
   const loadVotedIds = () => {
     try {
       const stored = localStorage.getItem(`voted_${user?.id}`);
       if (stored) setVotedIds(JSON.parse(stored));
-    } catch {
-      setVotedIds([]);
-    }
+    } catch { setVotedIds([]); }
   };
 
-  const markVoted = (electionId) => {
-    const updated = [...votedIds, electionId];
-    setVotedIds(updated);
-    localStorage.setItem(`voted_${user?.id}`, JSON.stringify(updated));
-  };
+  const handleVote = (electionId) => navigate(`/vote/${electionId}`);
+  const handleResults = (electionId) => navigate(`/results/${electionId}`);
 
-  const handleVote = (electionId) => {
-    navigate(`/vote/${electionId}`);
-  };
+  const activeElections   = elections.filter(e => e.status === 'active');
+  const talliedElections  = elections.filter(e => e.status === 'tallied');
+  const pendingElections  = elections.filter(e => e.status !== 'active' && e.status !== 'tallied');
 
-  const handleResults = (electionId) => {
-    navigate(`/results/${electionId}`);
-  };
-
-  const activeElections = elections.filter(e => e.status === 'active');
-  const talliedElections = elections.filter(e => e.status === 'tallied');
-  const pendingElections = elections.filter(e => e.status !== 'active' && e.status !== 'tallied');
-
-  if (loading) {
-    return (
-      <div style={styles.page}>
-        <div style={styles.loadingBox}>
-          <div style={styles.spinner} />
-          <p style={{ color: '#8CFAC7', marginTop: '1rem' }}>Loading elections...</p>
-        </div>
+  if (loading) return (
+    <div className="vp-page">
+      <style>{vpStyles}</style>
+      <div className="vp-loading">
+        <div className="vp-spinner" />
+        <p style={{ color: '#8CFAC7', marginTop: '1rem' }}>Loading elections...</p>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
-    <div style={styles.page}>
+    <div className="vp-page">
+      <style>{vpStyles}</style>
+
       {/* Header */}
-      <div style={styles.header}>
+      <div className="vp-header">
         <div>
-          <h1 style={styles.title}>🗳️ Voter Dashboard</h1>
-          <p style={styles.subtitle}>Welcome, <strong style={{ color: '#6CA2FF' }}>{user?.name}</strong> — Cast your vote securely</p>
+          <h1 className="vp-title">🗳️ Voter Dashboard</h1>
+          <p className="vp-subtitle">Welcome, <strong style={{ color: '#6CA2FF' }}>{user?.name}</strong></p>
         </div>
-        <div style={styles.badge}>
-          <span style={styles.badgeDot} />
-          Voter
-        </div>
+        <div className="vp-badge"><span className="vp-badge-dot" />Voter</div>
       </div>
 
-      {error && <div style={styles.errorBanner}>{error}</div>}
+      {error && <div className="vp-error">{error}</div>}
 
-      {/* Stats Row */}
-      <div style={styles.statsRow}>
-        <div style={{ ...styles.statCard, cursor: 'pointer' }}
-          onClick={() => document.getElementById('active-section')?.scrollIntoView({ behavior: 'smooth' })}>
-          <span style={{ ...styles.statNumber, color: '#6CA2FF' }}>{activeElections.length}</span>
-          <span style={styles.statLabel}>Active Elections</span>
-          <span style={styles.statHint}>↓ View</span>
-        </div>
-        <div style={{ ...styles.statCard, cursor: 'pointer' }}
-          onClick={() => document.getElementById('voted-section')?.scrollIntoView({ behavior: 'smooth' })}>
-          <span style={{ ...styles.statNumber, color: '#8CFAC7' }}>{votedIds.length}</span>
-          <span style={styles.statLabel}>Votes Cast</span>
-          <span style={styles.statHint}>↓ View</span>
-        </div>
-        <div style={{ ...styles.statCard, cursor: 'pointer' }}
-          onClick={() => document.getElementById('results-section')?.scrollIntoView({ behavior: 'smooth' })}>
-          <span style={{ ...styles.statNumber, color: '#FFA726' }}>{talliedElections.length}</span>
-          <span style={styles.statLabel}>Results Available</span>
-          <span style={styles.statHint}>↓ View</span>
-        </div>
+      {/* Stat Cards */}
+      <div className="vp-stats">
+        {[
+          { icon: '🗳️', value: activeElections.length, label: 'Active Elections', color: '#6CA2FF', glow: 'rgba(108,162,255,0.3)' },
+          { icon: '✅', value: votedIds.length,         label: 'Votes Cast',       color: '#8CFAC7', glow: 'rgba(140,250,199,0.3)' },
+          { icon: '📊', value: talliedElections.length, label: 'Results Ready',    color: '#FFA726', glow: 'rgba(255,167,38,0.3)'  },
+        ].map((s, i) => (
+          <div key={i} className="vp-stat-card" style={{ '--glow': s.glow, borderColor: `${s.color}33` }}
+            onClick={e => {
+              const el = e.currentTarget;
+              el.classList.remove('dancing');
+              void el.offsetWidth;
+              el.classList.add('dancing');
+              el.addEventListener('animationend', () => el.classList.remove('dancing'), { once: true });
+            }}>
+            <span className="vp-stat-icon">{s.icon}</span>
+            <span className="vp-stat-num" style={{ color: s.color }}>{s.value}</span>
+            <span className="vp-stat-label">{s.label}</span>
+          </div>
+        ))}
       </div>
 
       {/* Active Elections */}
-      <section id="active-section" style={styles.section}>
-        <h2 style={styles.sectionTitle}>
-          <span style={{ ...styles.dot, background: '#8CFAC7' }} /> Active Elections
-        </h2>
-        {activeElections.length === 0 ? (
-          <div style={styles.emptyCard}>No active elections at the moment.</div>
-        ) : (
-          activeElections.map(e => {
-            const hasVoted = votedIds.includes(e.id);
-            return (
-              <div key={e.id} style={styles.electionCard}>
-                <div style={styles.cardLeft}>
-                  <h3 style={styles.electionName}>{e.name}</h3>
-                  <div style={styles.candidateRow}>
-                    {e.candidates.map((c, i) => (
-                      <span key={i} style={styles.candidateChip}>{c}</span>
-                    ))}
+      <section className="vp-section">
+        <h2 className="vp-section-title"><span className="vp-dot" style={{ background: '#8CFAC7' }} />Active Elections</h2>
+        {activeElections.length === 0
+          ? <div className="vp-empty">No active elections at the moment.</div>
+          : activeElections.map(e => {
+              const hasVoted   = votedIds.includes(e.id);
+              const notStarted = e.start_time && new Date() < new Date(e.start_time);
+              return (
+                <div key={e.id} className="vp-card">
+                  <div className="vp-card-left">
+                    <h3 className="vp-election-name">{e.name}</h3>
+                    <div className="vp-chips">
+                      {e.candidates.map((c, i) => <span key={i} className="vp-chip">{c}</span>)}
+                    </div>
+                    {e.start_time && <p className="vp-time" style={{ color: notStarted ? '#FF6B6B' : '#8CFAC7' }}>🗓️ Starts: {new Date(e.start_time).toLocaleString()}</p>}
+                    {e.end_time   && <p className="vp-time">⏰ Ends: {new Date(e.end_time).toLocaleString()}</p>}
                   </div>
-                  {e.end_time && (
-                    <p style={styles.endTime}>
-                      ⏰ Voting ends: {new Date(e.end_time).toLocaleString()}
-                    </p>
-                  )}
+                  <div className="vp-card-right">
+                    {hasVoted   ? <div className="vp-voted-badge">✅ Voted</div>
+                    : notStarted ? <div className="vp-not-started-badge">🕒 Not Started</div>
+                    : <button className="vp-vote-btn" onClick={() => handleVote(e.id)}>🔒 Vote Now</button>}
+                  </div>
                 </div>
-                <div style={styles.cardRight}>
-                  {hasVoted ? (
-                    <div style={styles.votedBadge}>✅ Voted</div>
-                  ) : (
-                    <button onClick={() => handleVote(e.id)} style={styles.voteBtn}>
-                      🔒 Vote Now
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })
-        )}
+              );
+            })
+        }
       </section>
 
-      {/* Votes Cast */}
-      <section id="voted-section" style={styles.section}>
-        <h2 style={styles.sectionTitle}>
-          <span style={{ ...styles.dot, background: '#8CFAC7' }} /> Votes Cast
-        </h2>
-        {votedIds.length === 0 ? (
-          <div style={styles.emptyCard}>You have not voted in any election yet.</div>
-        ) : (
-          elections.filter(e => votedIds.includes(e.id)).map(e => (
-            <div key={e.id} style={{ ...styles.electionCard, opacity: 0.85 }}>
-              <div style={styles.cardLeft}>
-                <h3 style={styles.electionName}>{e.name}</h3>
-                <div style={styles.candidateRow}>
-                  {e.candidates.map((c, i) => (
-                    <span key={i} style={styles.candidateChip}>{c}</span>
-                  ))}
-                </div>
-              </div>
-              <div style={styles.cardRight}>
-                <div style={styles.votedBadge}>✅ Voted</div>
-              </div>
-            </div>
-          ))
-        )}
-      </section>
-
-      {/* Results Available */}
+      {/* Results */}
       {talliedElections.length > 0 && (
-        <section id="results-section" style={styles.section}>
-          <h2 style={styles.sectionTitle}>
-            <span style={{ ...styles.dot, background: '#FFA726' }} /> Results Available
-          </h2>
+        <section className="vp-section">
+          <h2 className="vp-section-title"><span className="vp-dot" style={{ background: '#FFA726' }} />Results Available</h2>
           {talliedElections.map(e => (
-            <div key={e.id} style={{ ...styles.electionCard, opacity: 0.85 }}>
-              <div style={styles.cardLeft}>
-                <h3 style={styles.electionName}>{e.name}</h3>
-                <div style={styles.candidateRow}>
-                  {e.candidates.map((c, i) => (
-                    <span key={i} style={styles.candidateChip}>{c}</span>
-                  ))}
-                </div>
+            <div key={e.id} className="vp-card" style={{ opacity: 0.9 }}>
+              <div className="vp-card-left">
+                <h3 className="vp-election-name">{e.name}</h3>
+                <div className="vp-chips">{e.candidates.map((c, i) => <span key={i} className="vp-chip">{c}</span>)}</div>
               </div>
-              <div style={styles.cardRight}>
-                <button onClick={() => handleResults(e.id)} style={styles.resultsBtn}>
-                  📊 View Results
-                </button>
+              <div className="vp-card-right">
+                <button className="vp-results-btn" onClick={() => handleResults(e.id)}>📊 View Results</button>
               </div>
             </div>
           ))}
         </section>
       )}
 
-      {/* Pending Elections */}
+      {/* Pending */}
       {pendingElections.length > 0 && (
-        <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>
-            <span style={{ ...styles.dot, background: '#AAB' }} /> Upcoming / Pending
-          </h2>
+        <section className="vp-section">
+          <h2 className="vp-section-title"><span className="vp-dot" style={{ background: '#556' }} />Upcoming</h2>
           {pendingElections.map(e => (
-            <div key={e.id} style={{ ...styles.electionCard, opacity: 0.5 }}>
-              <div style={styles.cardLeft}>
-                <h3 style={styles.electionName}>{e.name}</h3>
-                <p style={{ color: '#AAB', fontSize: '0.85rem', margin: '0.3rem 0 0 0' }}>
-                  Status: {e.status.toUpperCase()}
-                </p>
+            <div key={e.id} className="vp-card" style={{ opacity: 0.5 }}>
+              <div className="vp-card-left">
+                <h3 className="vp-election-name">{e.name}</h3>
+                <p style={{ color: '#8899AA', fontSize: '0.85rem', margin: '0.3rem 0 0' }}>Status: {e.status.toUpperCase()}</p>
               </div>
-              <div style={styles.cardRight}>
-                <div style={styles.pendingBadge}>⏳ Not yet open</div>
-              </div>
+              <div className="vp-card-right"><div className="vp-pending-badge">⏳ Not yet open</div></div>
             </div>
           ))}
         </section>
       )}
 
-      {/* Info Footer */}
-      <div style={styles.infoBox}>
-        <p style={{ margin: 0, fontSize: '0.85rem', color: '#8899AA' }}>
-          🔐 All votes are encrypted using Paillier homomorphic encryption. Your vote is anonymous and tamper-proof.
-        </p>
-      </div>
+      <div className="vp-info">🔐 All votes are encrypted using Paillier homomorphic encryption. Your vote is anonymous and tamper-proof.</div>
     </div>
   );
 }
 
-const styles = {
-  page: {
-    background: '#0B101A',
-    minHeight: '100vh',
-    color: '#E6EEF8',
-    padding: '2rem',
-    fontFamily: 'system-ui, sans-serif'
-  },
-  header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: '2rem',
-    flexWrap: 'wrap',
-    gap: '1rem'
-  },
-  title: {
-    margin: '0 0 0.3rem 0',
-    fontSize: '1.8rem',
-    color: '#E6EEF8'
-  },
-  subtitle: {
-    margin: 0,
-    color: '#8899AA',
-    fontSize: '1rem'
-  },
-  badge: {
-    background: '#162033',
-    border: '1px solid #27324F',
-    color: '#6CA2FF',
-    padding: '0.4rem 1rem',
-    borderRadius: '999px',
-    fontWeight: 700,
-    fontSize: '0.9rem',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.4rem'
-  },
-  badgeDot: {
-    width: '8px',
-    height: '8px',
-    borderRadius: '50%',
-    background: '#8CFAC7',
-    display: 'inline-block'
-  },
-  statsRow: {
-    display: 'flex',
-    gap: '1rem',
-    marginBottom: '2rem',
-    flexWrap: 'wrap'
-  },
-  statCard: {
-    flex: '1 1 150px',
-    background: '#162033',
-    border: '1px solid #27324F',
-    borderRadius: '12px',
-    padding: '1.2rem',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '0.3rem'
-  },
-  statNumber: {
-    fontSize: '2rem',
-    fontWeight: 800
-  },
-  statLabel: {
-    color: '#8899AA',
-    fontSize: '0.85rem'
-  },
-  statHint: {
-    color: '#3A4F70',
-    fontSize: '0.75rem',
-    marginTop: '0.2rem'
-  },
-  section: {
-    marginBottom: '2rem'
-  },
-  sectionTitle: {
-    fontSize: '1.1rem',
-    fontWeight: 700,
-    color: '#E6EEF8',
-    marginBottom: '1rem',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem'
-  },
-  dot: {
-    width: '10px',
-    height: '10px',
-    borderRadius: '50%',
-    display: 'inline-block'
-  },
-  electionCard: {
-    background: '#162033',
-    border: '1px solid #27324F',
-    borderRadius: '12px',
-    padding: '1.2rem 1.5rem',
-    marginBottom: '0.8rem',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: '1rem',
-    flexWrap: 'wrap'
-  },
-  cardLeft: {
-    flex: 1
-  },
-  cardRight: {
-    flexShrink: 0
-  },
-  electionName: {
-    margin: '0 0 0.5rem 0',
-    fontSize: '1.1rem',
-    color: '#E6EEF8'
-  },
-  candidateRow: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '0.4rem'
-  },
-  candidateChip: {
-    background: '#1E2B44',
-    border: '1px solid #3A4F70',
-    color: '#A0B4D0',
-    padding: '0.2rem 0.7rem',
-    borderRadius: '999px',
-    fontSize: '0.8rem'
-  },
-  endTime: {
-    margin: '0.5rem 0 0 0',
-    fontSize: '0.82rem',
-    color: '#FFF59D'
-  },
-  voteBtn: {
-    background: '#6CA2FF',
-    color: '#0B101A',
-    border: 'none',
-    padding: '0.7rem 1.4rem',
-    borderRadius: '10px',
-    fontWeight: 700,
-    fontSize: '0.95rem',
-    cursor: 'pointer'
-  },
-  votedBadge: {
-    background: '#1B3A2F',
-    color: '#8CFAC7',
-    border: '1px solid #2E6B50',
-    padding: '0.5rem 1rem',
-    borderRadius: '10px',
-    fontWeight: 700,
-    fontSize: '0.9rem'
-  },
-  resultsBtn: {
-    background: '#FFA726',
-    color: '#0B101A',
-    border: 'none',
-    padding: '0.7rem 1.4rem',
-    borderRadius: '10px',
-    fontWeight: 700,
-    fontSize: '0.95rem',
-    cursor: 'pointer'
-  },
-  pendingBadge: {
-    background: '#1B2537',
-    color: '#8899AA',
-    border: '1px solid #27324F',
-    padding: '0.5rem 1rem',
-    borderRadius: '10px',
-    fontSize: '0.9rem'
-  },
-  emptyCard: {
-    background: '#162033',
-    border: '1px dashed #27324F',
-    borderRadius: '12px',
-    padding: '1.5rem',
-    color: '#8899AA',
-    textAlign: 'center'
-  },
-  errorBanner: {
-    background: '#2A1A1A',
-    border: '1px solid #FF6B6B',
-    color: '#FF6B6B',
-    padding: '0.8rem 1rem',
-    borderRadius: '10px',
-    marginBottom: '1.5rem'
-  },
-  infoBox: {
-    background: '#162033',
-    border: '1px solid #27324F',
-    borderRadius: '10px',
-    padding: '1rem 1.2rem',
-    marginTop: '1rem'
-  },
-  loadingBox: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: '50vh'
-  },
-  spinner: {
-    width: '40px',
-    height: '40px',
-    border: '4px solid #27324F',
-    borderTop: '4px solid #6CA2FF',
-    borderRadius: '50%',
-    animation: 'spin 1s linear infinite'
+const vpStyles = `
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Inter:wght@400;500;600;700&display=swap');
+  *, *::before, *::after { box-sizing: border-box; }
+  .vp-page { background: #0B101A; min-height: 100vh; color: #E6EEF8; padding: 1.5rem; font-family: 'Inter', system-ui, sans-serif; max-width: 900px; margin: 0 auto; }
+  .vp-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 0.8rem; margin-bottom: 1.5rem; }
+  .vp-title { margin: 0 0 0.2rem; font-size: clamp(1.3rem, 5vw, 1.8rem); font-family: 'Orbitron', monospace; color: #E6EEF8; }
+  .vp-subtitle { margin: 0; color: #8899AA; font-size: clamp(0.85rem, 3vw, 1rem); }
+  .vp-badge { background: #162033; border: 1px solid #27324F; color: #6CA2FF; padding: 0.4rem 1rem; border-radius: 999px; font-weight: 700; font-size: 0.9rem; display: flex; align-items: center; gap: 0.4rem; }
+  .vp-badge-dot { width: 8px; height: 8px; border-radius: 50%; background: #8CFAC7; display: inline-block; }
+  .vp-error { background: #2A1A1A; border: 1px solid #FF6B6B; color: #FF6B6B; padding: 0.8rem 1rem; border-radius: 10px; margin-bottom: 1.2rem; }
+
+  /* Stat Cards */
+  .vp-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.8rem; margin-bottom: 1.5rem; }
+  @media (max-width: 480px) { .vp-stats { grid-template-columns: 1fr; } }
+  .vp-stat-card { background: rgba(15,25,50,0.85); border-radius: 16px; padding: 1.1rem 0.8rem; text-align: center; cursor: pointer; position: relative; overflow: hidden; border: 1px solid rgba(108,162,255,0.15); user-select: none; transition: transform 0.2s, box-shadow 0.2s; }
+  .vp-stat-card:hover { transform: translateY(-3px); box-shadow: 0 8px 30px var(--glow); }
+  .vp-stat-card:active { transform: scale(0.97); }
+  .vp-stat-card.dancing { animation: vp-dance 0.7s cubic-bezier(0.36,0.07,0.19,0.97); }
+  .vp-stat-icon { font-size: 1.4rem; display: block; margin-bottom: 0.3rem; }
+  .vp-stat-num { display: block; font-size: clamp(1.6rem, 6vw, 2.2rem); font-weight: 800; font-family: 'Orbitron', monospace; line-height: 1.1; margin-bottom: 0.3rem; }
+  .vp-stat-label { font-size: clamp(0.62rem, 2vw, 0.72rem); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #8899AA; }
+
+  /* Elections */
+  .vp-section { margin-bottom: 1.8rem; }
+  .vp-section-title { font-size: clamp(0.95rem, 3vw, 1.1rem); font-weight: 700; color: #E6EEF8; margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.5rem; }
+  .vp-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .vp-card { background: #162033; border: 1px solid #27324F; border-radius: 12px; padding: 1rem 1.2rem; margin-bottom: 0.7rem; display: flex; justify-content: space-between; align-items: center; gap: 0.8rem; flex-wrap: wrap; transition: border-color 0.2s; }
+  .vp-card:hover { border-color: #3A4F70; }
+  .vp-card-left { flex: 1; min-width: 0; }
+  .vp-card-right { flex-shrink: 0; }
+  .vp-election-name { margin: 0 0 0.5rem; font-size: clamp(0.95rem, 3.5vw, 1.1rem); color: #E6EEF8; word-break: break-word; }
+  .vp-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .vp-chip { background: #1E2B44; border: 1px solid #3A4F70; color: #A0B4D0; padding: 0.18rem 0.6rem; border-radius: 999px; font-size: clamp(0.7rem, 2.5vw, 0.8rem); }
+  .vp-time { margin: 0.4rem 0 0; font-size: clamp(0.72rem, 2.5vw, 0.82rem); color: #FFF59D; }
+
+  /* Buttons & Badges */
+  .vp-vote-btn { background: linear-gradient(135deg, #6CA2FF, #4A7FE0); color: #0B101A; border: none; padding: clamp(0.55rem, 2vw, 0.7rem) clamp(1rem, 3vw, 1.4rem); border-radius: 10px; font-weight: 700; font-size: clamp(0.82rem, 3vw, 0.95rem); cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; white-space: nowrap; }
+  .vp-vote-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(108,162,255,0.4); }
+  .vp-vote-btn:active { transform: scale(0.97); }
+  .vp-results-btn { background: linear-gradient(135deg, #FFA726, #E08A00); color: #0B101A; border: none; padding: clamp(0.55rem, 2vw, 0.7rem) clamp(1rem, 3vw, 1.4rem); border-radius: 10px; font-weight: 700; font-size: clamp(0.82rem, 3vw, 0.95rem); cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; white-space: nowrap; }
+  .vp-results-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(255,167,38,0.4); }
+  .vp-voted-badge { background: #1B3A2F; color: #8CFAC7; border: 1px solid #2E6B50; padding: 0.5rem 1rem; border-radius: 10px; font-weight: 700; font-size: clamp(0.8rem, 3vw, 0.9rem); white-space: nowrap; }
+  .vp-not-started-badge { background: #2A1F00; color: #FFA726; border: 1px solid #7A5200; padding: 0.5rem 1rem; border-radius: 10px; font-weight: 700; font-size: clamp(0.8rem, 3vw, 0.9rem); white-space: nowrap; }
+  .vp-pending-badge { background: #1B2537; color: #8899AA; border: 1px solid #27324F; padding: 0.5rem 1rem; border-radius: 10px; font-size: clamp(0.8rem, 3vw, 0.9rem); }
+  .vp-empty { background: #162033; border: 1px dashed #27324F; border-radius: 12px; padding: 1.5rem; color: #8899AA; text-align: center; font-size: 0.9rem; }
+  .vp-info { background: #162033; border: 1px solid #27324F; border-radius: 10px; padding: 0.9rem 1.1rem; margin-top: 1rem; font-size: clamp(0.75rem, 2.5vw, 0.85rem); color: #8899AA; line-height: 1.5; }
+
+  /* Loading */
+  .vp-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 50vh; }
+  .vp-spinner { width: 40px; height: 40px; border: 4px solid #27324F; border-top: 4px solid #6CA2FF; border-radius: 50%; animation: vp-spin 1s linear infinite; }
+
+  /* Animations */
+  @keyframes vp-dance {
+    0%   { transform: translateY(0) rotate(0deg) scale(1); }
+    15%  { transform: translateY(-12px) rotate(-6deg) scale(1.08); }
+    30%  { transform: translateY(-18px) rotate(6deg) scale(1.12); }
+    45%  { transform: translateY(-8px) rotate(-4deg) scale(1.06); }
+    60%  { transform: translateY(-14px) rotate(5deg) scale(1.1); }
+    75%  { transform: translateY(-5px) rotate(-2deg) scale(1.04); }
+    90%  { transform: translateY(-10px) rotate(3deg) scale(1.06); }
+    100% { transform: translateY(0) rotate(0deg) scale(1); }
   }
-};
+  @keyframes vp-spin { to { transform: rotate(360deg); } }
+`;
 
 export default VoterPanel;

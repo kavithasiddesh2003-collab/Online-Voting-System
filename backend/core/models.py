@@ -5,6 +5,7 @@ import sqlite3
 CORE_DIR = os.path.dirname(__file__)
 ROOT_DIR = os.path.abspath(os.path.join(CORE_DIR, "..", ".."))
 DATABASE_DIR = os.path.join(ROOT_DIR, "database")
+os.makedirs(DATABASE_DIR, exist_ok=True)
 
 DB_PATH = os.path.join(DATABASE_DIR, "database.db")
 USERS_CSV = os.path.join(DATABASE_DIR, "users.csv")
@@ -130,6 +131,23 @@ def init_db():
             # Auto-approve existing voters seeded from CSV
             c.execute("UPDATE users SET approved=1 WHERE role='voter'")
 
+        # Fix voters with NULL password_hash — generate from name + DOB
+        from werkzeug.security import generate_password_hash as _gph
+        null_voters = conn.execute(
+            "SELECT id, name, dob FROM users WHERE role='voter' AND (password_hash IS NULL OR password_hash='')"
+        ).fetchall()
+        for vid, vname, vdob in null_voters:
+            try:
+                name_part = (vname or '').strip().lower().replace(' ', '')[:4]
+                dob_parts = (vdob or '').replace('/', '-').split('-')
+                day_part = dob_parts[2] if len(dob_parts) == 3 and len(dob_parts[0]) == 4 else (dob_parts[0] if dob_parts else '01')
+                auto_pass = name_part + day_part.zfill(2)
+                pwd_hash = _gph(auto_pass)
+                conn.execute("UPDATE users SET password_hash=? WHERE id=?", (pwd_hash, vid))
+            except Exception:
+                pass
+        conn.commit()
+
     conn.commit()
     conn.close()
     seed_users_from_csv()
@@ -159,6 +177,17 @@ def seed_users_from_csv():
             if not name:
                 continue
             pwd_hash = generate_password_hash(password) if password else None
+            # Auto-generate password for voters with no password: first 4 letters of name + day of DOB
+            if not pwd_hash and role == 'voter' and name and dob:
+                try:
+                    name_part = name.strip().lower().replace(' ', '')[:4]
+                    # DOB can be DD-MM-YYYY or YYYY-MM-DD
+                    dob_parts = dob.replace('/', '-').split('-')
+                    day_part = dob_parts[2] if len(dob_parts[0]) == 4 else dob_parts[0]
+                    auto_pass = name_part + day_part.zfill(2)
+                    pwd_hash = generate_password_hash(auto_pass)
+                except Exception:
+                    pass
             try:
                 if USE_MYSQL:
                     c.execute(

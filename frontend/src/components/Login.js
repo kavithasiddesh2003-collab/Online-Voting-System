@@ -21,8 +21,10 @@ function Login({ onLogin }) {
     try {
       const res = await api.post('/auth', { phone: `+91${phone.trim()}`, password, otp: otp.trim() });
       const { token, user } = res.data;
+      sessionStorage.setItem('sv_user', JSON.stringify(user));
+      sessionStorage.setItem('sv_token', token);
       onLogin(user, token);
-      navigate('/voter');
+      window.location.href = '/voter';
     } catch (err) {
       setError(err.response?.data?.error || 'Sign-in failed.');
     }
@@ -49,7 +51,9 @@ function Login({ onLogin }) {
       const res = await api.post('/admin-login', { email: email.trim(), password });
       const { token, user } = res.data;
       onLogin(user, token);
-      navigate('/admin');
+      sessionStorage.setItem('sv_user', JSON.stringify(user));
+      sessionStorage.setItem('sv_token', token);
+      window.location.href = '/admin';
     } catch (err) {
       setError(err.response?.data?.error || 'Admin sign-in failed.');
     }
@@ -103,7 +107,8 @@ function Login({ onLogin }) {
         .lg-eye { position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: rgba(0,229,255,0.5); padding: 0.2rem; display: flex; align-items: center; transition: color 0.2s; }
         .lg-eye:hover { color: #00e5ff; }
         .lg-otp-row { display: flex; align-items: flex-end; gap: 0.8rem; }
-        .lg-otp-row .lg-field { flex: 1; margin-bottom: 0; }
+        .lg-otp-row .lg-field { flex: 1; margin-bottom: 0; min-width: 0; }
+        .lg-otp-row .lg-field input { min-width: 0; width: 100%; letter-spacing: 0.2em; font-size: 1.1rem; }
         .lg-send-btn { font-family: 'Orbitron', monospace; font-size: 0.52rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; padding: 0.75rem 1rem; border: 1px solid rgba(0,229,255,0.4); color: #00e5ff; background: rgba(0,229,255,0.05); cursor: pointer; transition: all 0.25s ease; border-radius: 2px; white-space: nowrap; flex-shrink: 0; height: fit-content; }
         .lg-send-btn:hover:not(:disabled) { background: rgba(0,229,255,0.1); box-shadow: 0 0 14px rgba(0,229,255,0.25); }
         .lg-send-btn:disabled { opacity: 0.45; cursor: not-allowed; }
@@ -220,3 +225,7 @@ function Login({ onLogin }) {
 }
 
 export default Login;
+
+
+
+
