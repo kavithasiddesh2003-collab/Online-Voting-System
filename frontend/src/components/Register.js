@@ -189,7 +189,6 @@ function Register() {
             {passwordReady && (
               <div className="rg-hint">
                 🔑 Your password is <strong>first 4 letters of your name</strong> + <strong>day of birth</strong>
-                {' '}— e.g. <strong style={{ color: '#00e5ff' }}>{autoPassword}</strong>
               </div>
             )}
           </div>
