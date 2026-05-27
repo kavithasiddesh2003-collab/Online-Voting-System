@@ -280,24 +280,27 @@ function ResultsPanel({ id, initialResults }) {
           🎉 Winner: {winner[0]} with {winner[1]} vote{winner[1] !== 1 ? 's' : ''}
         </div>
       )}
-      {entries.map(([name, votes]) => {
-        const pct = total ? Math.round((votes / total) * 100) : 0;
-        const isTopWithTie = isTie && votes === entries[0][1];
-        const isWinner     = !isTie && name === winner[0];
-        return (
-          <div key={name} style={{ marginBottom: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 5 }}>
-              <span style={{ color: isWinner ? '#86efac' : isTopWithTie ? '#fbbf24' : '#a0b4d0', fontWeight: isWinner || isTopWithTie ? 700 : 400 }}>
-                {isWinner ? '🏆 ' : isTopWithTie ? '🤝 ' : ''}{name}
-              </span>
-              <span style={{ color: '#8899aa' }}>{votes} vote{votes !== 1 ? 's' : ''} ({pct}%)</span>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10, marginTop: 4 }}>
+        {entries.map(([name, votes]) => {
+          const pct        = total ? Math.round((votes / total) * 100) : 0;
+          const isWinner   = !isTie && name === winner[0];
+          const isTieTop   = isTie && votes === entries[0][1];
+          const borderClr  = isWinner ? '#22c55e' : isTieTop ? '#f59e0b' : '#2a3a5c';
+          const numClr     = isWinner ? '#4ade80' : isTieTop ? '#fbbf24' : '#5b7cf6';
+          const bgClr      = isWinner ? '#0d2b1a' : isTieTop ? '#1c1400' : '#0f172a';
+          return (
+            <div key={name} style={{ background: bgClr, border: `1px solid ${borderClr}55`, borderRadius: 12, padding: '14px 10px', textAlign: 'center', position: 'relative' }}>
+              {isWinner && <div style={{ fontSize: 18, marginBottom: 4 }}>🏆</div>}
+              {isTieTop && !isWinner && <div style={{ fontSize: 18, marginBottom: 4 }}>🤝</div>}
+              {!isWinner && !isTieTop && <div style={{ fontSize: 18, marginBottom: 4 }}>👤</div>}
+              <div style={{ fontSize: 22, fontWeight: 800, color: numClr, fontFamily: 'monospace', lineHeight: 1.1 }}>{votes}</div>
+              <div style={{ fontSize: 11, color: '#8899aa', fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', margin: '3px 0' }}>votes</div>
+              <div style={{ fontSize: 13, color: '#e6eef8', fontWeight: 700, wordBreak: 'break-word' }}>{name}</div>
+              <div style={{ fontSize: 11, color: numClr, fontWeight: 700, marginTop: 3 }}>{pct}%</div>
             </div>
-            <div style={{ height: 12, background: '#1e2a45', borderRadius: 6, overflow: 'hidden' }}>
-              <div style={{ width: `${pct}%`, height: '100%', background: isWinner ? 'linear-gradient(90deg,#22c55e,#4ade80)' : isTopWithTie ? 'linear-gradient(90deg,#f59e0b,#fbbf24)' : 'linear-gradient(90deg,#5b7cf6,#818cf8)', borderRadius: 6, transition: 'width 0.6s ease' }} />
-            </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -88,6 +88,7 @@ function VoterPanel({ token, user }) {
   const activeElections  = elections.filter(e => e.status === 'active');
   const talliedElections = elections.filter(e => e.status === 'tallied');
   const pendingElections = elections.filter(e => e.status !== 'active' && e.status !== 'tallied');
+  const votedElections   = elections.filter(e => e.has_voted);
 
   // ── Loading screen ────────────────────────────────────────────────────────
 
@@ -252,23 +253,15 @@ function VoterPanel({ token, user }) {
             Results Available
           </h2>
           {talliedElections.map(e => {
-            const savedVote = getSavedVote(user?.id, e.id);
             return (
               <div key={e.id} className="vp-card" style={{ opacity: 0.9 }}>
                 <div className="vp-card-left">
                   <h3 className="vp-election-name">{e.name}</h3>
                   <div className="vp-chips">
                     {e.candidates.map((c, i) => (
-                      <span key={i} className={`vp-chip ${savedVote === c ? 'vp-chip-voted' : ''}`}>
-                        {savedVote === c ? '✓ ' : ''}{c}
-                      </span>
+                      <span key={i} className="vp-chip">{c}</span>
                     ))}
                   </div>
-                  {savedVote && (
-                    <p className="vp-time" style={{ color: '#8CFAC7', marginTop: '0.5rem' }}>
-                      ✅ You voted for <strong>{savedVote}</strong>
-                    </p>
-                  )}
                 </div>
                 <div className="vp-card-right">
                   <button className="vp-results-btn" onClick={() => handleResults(e.id)}>
@@ -281,8 +274,40 @@ function VoterPanel({ token, user }) {
         </section>
       )}
 
-      {/* Votes Cast scroll anchor */}
-      <div ref={votedRef} />
+      {/* ── Votes Cast ───────────────────────────────────────────────────── */}
+      {votedElections.length > 0 && (
+        <section className="vp-section" ref={votedRef}>
+          <h2 className="vp-section-title">
+            <span className="vp-dot" style={{ background: '#8CFAC7' }} />
+            Votes Cast
+          </h2>
+          {votedElections.map(e => {
+            const statusLabel = e.status === 'tallied' ? '📊 Results Ready' : e.status === 'active' ? '🟢 Active' : e.status.toUpperCase();
+            const statusColor = e.status === 'tallied' ? '#FFA726' : e.status === 'active' ? '#8CFAC7' : '#8899AA';
+            return (
+              <div key={e.id} className="vp-card" style={{ borderColor: '#2E6B5033' }}>
+                <div className="vp-card-left">
+                  <h3 className="vp-election-name">{e.name}</h3>
+                  <div className="vp-chips">
+                    {e.candidates.map((c, i) => (
+                      <span key={i} className="vp-chip">{c}</span>
+                    ))}
+                  </div>
+                  <p className="vp-time" style={{ color: statusColor, marginTop: '0.3rem' }}>
+                    {statusLabel}
+                  </p>
+                </div>
+                <div className="vp-card-right">
+                  <div className="vp-voted-badge">
+                    <span className="vp-voted-tick">✅</span>
+                    <span className="vp-voted-text">Voted</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </section>
+      )}
 
       {/* ── Upcoming / Pending ────────────────────────────────────────────── */}
       {pendingElections.length > 0 && (
