@@ -41,17 +41,8 @@ function VoteForm({ token, user }) {
         anon_hash: CryptoJS.SHA256(`${user.id}_${electionId}_salt`).toString()
       };
       await api.post('/vote', voteData, { headers: { Authorization: `Bearer ${token}` } });
-      // Save voted election to localStorage so VoterPanel counter updates
-      try {
-        const key = `voted_${user?.id}`;
-        const existing = JSON.parse(localStorage.getItem(key) || '[]');
-        if (!existing.includes(parseInt(electionId))) {
-          existing.push(parseInt(electionId));
-          localStorage.setItem(key, JSON.stringify(existing));
-        }
-      } catch {}
       setMessage('Vote submitted successfully! ✅');
-      setTimeout(() => navigate('/voter'), 1500);
+      setTimeout(() => navigate('/voter', { state: { justVoted: Date.now() } }), 1500);
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to submit vote');
     }

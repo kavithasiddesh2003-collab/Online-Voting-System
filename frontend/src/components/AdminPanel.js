@@ -245,11 +245,70 @@ function VoterStatus({ id }) {
 }
 
 /* ─── single election row ─── */
+/* ─── results panel for tallied elections ─── */
+function ResultsPanel({ id, initialResults }) {
+  const [data, setData] = useState(initialResults || null);
+
+  useEffect(() => {
+    // Fallback fetch if results weren't in the election list response
+    if (data && Object.keys(data).length > 0) return;
+    api.get(`/results/${id}`)
+      .then(r => { if (r.data.results) setData(r.data.results); })
+      .catch(() => {});
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!data || Object.keys(data).length === 0)
+    return <div style={{ color: '#8899aa', fontSize: 13, padding: '8px 0' }}>⏳ Results not available yet.</div>;
+
+  const entries = Object.entries(data).sort((a, b) => b[1] - a[1]);
+  const total   = entries.reduce((s, [, v]) => s + v, 0);
+  const winner  = entries[0];
+  const isTie   = entries.length > 1 && entries[0][1] === entries[1][1];
+
+  return (
+    <div>
+      <div style={{ color: '#e6eef8', fontWeight: 700, marginBottom: 12, fontSize: 14 }}>
+        🏆 Final Results — <span style={{ color: '#5b7cf6' }}>{total} total vote{total !== 1 ? 's' : ''}</span>
+      </div>
+      {isTie && (
+        <div style={{ background: '#f59e0b22', border: '1px solid #f59e0b44', color: '#fbbf24', borderRadius: 8, padding: '8px 14px', marginBottom: 12, fontSize: 13, fontWeight: 600 }}>
+          ⚠️ Tie between {entries.filter(([,v]) => v === entries[0][1]).map(([k]) => k).join(' & ')}
+        </div>
+      )}
+      {!isTie && winner && (
+        <div style={{ background: '#14532d', border: '1px solid #22c55e44', color: '#86efac', borderRadius: 8, padding: '8px 14px', marginBottom: 12, fontSize: 13, fontWeight: 700 }}>
+          🎉 Winner: {winner[0]} with {winner[1]} vote{winner[1] !== 1 ? 's' : ''}
+        </div>
+      )}
+      {entries.map(([name, votes]) => {
+        const pct = total ? Math.round((votes / total) * 100) : 0;
+        const isTopWithTie = isTie && votes === entries[0][1];
+        const isWinner     = !isTie && name === winner[0];
+        return (
+          <div key={name} style={{ marginBottom: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 5 }}>
+              <span style={{ color: isWinner ? '#86efac' : isTopWithTie ? '#fbbf24' : '#a0b4d0', fontWeight: isWinner || isTopWithTie ? 700 : 400 }}>
+                {isWinner ? '🏆 ' : isTopWithTie ? '🤝 ' : ''}{name}
+              </span>
+              <span style={{ color: '#8899aa' }}>{votes} vote{votes !== 1 ? 's' : ''} ({pct}%)</span>
+            </div>
+            <div style={{ height: 12, background: '#1e2a45', borderRadius: 6, overflow: 'hidden' }}>
+              <div style={{ width: `${pct}%`, height: '100%', background: isWinner ? 'linear-gradient(90deg,#22c55e,#4ade80)' : isTopWithTie ? 'linear-gradient(90deg,#f59e0b,#fbbf24)' : 'linear-gradient(90deg,#5b7cf6,#818cf8)', borderRadius: 6, transition: 'width 0.6s ease' }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─── single election row ─── */
 function ElectionRow({ e, onDeleted, onEdited, onError }) {
-  const [showLive, setShowLive]     = useState(false);
-  const [showVoters, setShowVoters] = useState(false);
-  const [editOpen, setEditOpen]     = useState(false);
-  const [tallying, setTallying]     = useState(false);
+  const [showLive, setShowLive]         = useState(false);
+  const [showVoters, setShowVoters]     = useState(false);
+  const [editOpen, setEditOpen]         = useState(false);
+  const [tallying, setTallying]         = useState(false);
+  const [tallyResults, setTallyResults] = useState(null); // populated after tally
 
   const now   = new Date();
   const started = !e.start_time || now > new Date(e.start_time);
@@ -259,7 +318,9 @@ function ElectionRow({ e, onDeleted, onEdited, onError }) {
     setTallying(true);
     try {
       const r = await api.post(`/admin/tally-auto/${e.id}`);
-      onEdited(`Tallied! ${Object.entries(r.data.results || {}).map(([k,v]) => `${k}: ${v}`).join(', ')}`);
+      setTallyResults(r.data.results || {});
+      setShowLive(true); // open the panel to show results
+      onEdited('Tallied successfully! Results are shown below.');
     } catch (ex) { onError(ex.response?.data?.error || 'Tally failed.'); }
     finally { setTallying(false); }
   };
@@ -306,8 +367,15 @@ function ElectionRow({ e, onDeleted, onEdited, onError }) {
           <div style={{ color: '#22c55e', fontSize: 13, marginBottom: 8 }}>✅ Voting ended — ready to tally</div>
         )}
 
-        {/* live count */}
-        {showLive && (
+        {/* results: always visible for tallied elections */}
+        {(e.status === 'tallied') && (
+          <div style={{ background: '#0f172a', borderRadius: 8, padding: '14px 16px', marginBottom: 8 }}>
+            <ResultsPanel id={e.id} initialResults={tallyResults || e.results} />
+          </div>
+        )}
+
+        {/* live count: only for active elections */}
+        {showLive && e.status !== 'tallied' && (
           <div style={{ background: '#0f172a', borderRadius: 8, padding: '14px 16px', marginBottom: 8 }}>
             <LiveCount id={e.id} />
           </div>

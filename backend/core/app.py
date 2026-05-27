@@ -264,6 +264,7 @@ def list_elections():
             'candidate_photos': photos,
             'status': e[3],
             'public_key': json.loads(e[4]) if e[4] else None,
+            'results': json.loads(e[5]) if e[5] else None,
             'end_time': e[6] if len(e) > 6 else None,
             'start_time': e[7] if len(e) > 7 else None,
             'has_voted': has_voted(user_id, e[0]) if user_id else False,

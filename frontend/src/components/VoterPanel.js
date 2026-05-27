@@ -1,24 +1,37 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../api';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 function VoterPanel({ token, user }) {
   const [elections, setElections] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const activeRef  = useRef(null);
   const resultsRef = useRef(null);
   const votedRef   = useRef(null);
 
-  useEffect(() => { fetchElections(); }, []);
+  // Initial load
+  useEffect(() => { fetchElections(true); }, []);
+  // Re-fetch on every navigation back to this page (e.g. after casting a vote)
+  useEffect(() => { fetchElections(false); }, [location.key, location.state?.justVoted]);  // eslint-disable-line react-hooks/exhaustive-deps
+  // Auto-refresh every 5 seconds
+  useEffect(() => {
+    const interval = setInterval(() => { fetchElections(false); }, 5000);
+    return () => clearInterval(interval);
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchElections = async () => {
+  const fetchElections = async (isInitial = false) => {
+    if (isInitial) setLoading(true);
+    else setRefreshing(true);
     try {
-      const res = await api.get('/elections', { headers: { Authorization: `Bearer ${token}` } });
+      const res = await api.get(`/elections?t=${Date.now()}`, { headers: { Authorization: `Bearer ${token}` } });
       setElections(res.data);
+      setError('');
     } catch { setError('Failed to load elections. Please try again.'); }
-    finally { setLoading(false); }
+    finally { setLoading(false); setRefreshing(false); }
   };
 
   const handleVote = (electionId) => navigate(`/vote/${electionId}`);
