@@ -22,8 +22,8 @@ function CandidateRow({ idx, name, photo, onChange, onRemove }) {
           : <svg width="22" height="22" viewBox="0 0 24 24" fill="#4a5a7a"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>}
       </div>
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <input style={inp} placeholder={`Candidate ${idx + 1} name`} value={name} onChange={e => onChange(idx, 'name', e.target.value)} />
-        <input style={inp} placeholder="Photo URL (optional)" value={photo} onChange={e => onChange(idx, 'photo', e.target.value)} />
+        <input style={inp} placeholder={`Candidate name`} value={name} onChange={e => onChange(idx, 'name', e.target.value)} />
+        <input style={inp} placeholder="Photo URL" value={photo} onChange={e => onChange(idx, 'photo', e.target.value)} />
       </div>
       {onRemove && <button onClick={() => onRemove(idx)} style={{ background: 'none', border: 'none', color: '#ff6b6b', cursor: 'pointer', fontSize: 18, padding: '0 4px' }}>×</button>}
     </div>
@@ -33,9 +33,8 @@ function CandidateRow({ idx, name, photo, onChange, onRemove }) {
 /* ─── create election (inline) ─── */
 function CreateElectionForm({ onCreated, onError }) {
   const [name, setName]         = useState('');
-  const [duration, setDuration] = useState('');
   const [startTime, setStartTime] = useState('');
-  const [endTime, setEndTime]   = useState('');
+  const [endTime, setEndTime]     = useState('');
   const [candidates, setCandidates] = useState([{ name: '', photo: '' }, { name: '', photo: '' }]);
   const [saving, setSaving]     = useState(false);
 
@@ -47,18 +46,20 @@ function CreateElectionForm({ onCreated, onError }) {
     const cList = candidates.filter(c => c.name.trim());
     if (!name.trim())     { onError('Enter an election name.'); return; }
     if (cList.length < 2) { onError('Add at least 2 candidates.'); return; }
+    if (!startTime)       { onError('Please set a start date & time.'); return; }
+    if (!endTime)         { onError('Please set an end date & time.'); return; }
+    if (new Date(endTime) <= new Date(startTime)) { onError('End time must be after start time.'); return; }
     setSaving(true);
     try {
       await api.post('/admin/election', {
         name: name.trim(),
         candidates: cList.map(c => c.name.trim()),
         candidate_photos: cList.map(c => c.photo.trim()),
-        duration_minutes: parseInt(duration) || 0,
-        start_time: startTime || null,
-        end_time: endTime || null,
+        start_time: startTime,
+        end_time: endTime,
       });
       onCreated('Election created!');
-      setName(''); setDuration(''); setStartTime(''); setEndTime('');
+      setName(''); setStartTime(''); setEndTime('');
       setCandidates([{ name: '', photo: '' }, { name: '', photo: '' }]);
     } catch (e) { onError(e.response?.data?.error || 'Failed to create.'); }
     finally { setSaving(false); }
@@ -67,15 +68,14 @@ function CreateElectionForm({ onCreated, onError }) {
   return (
     <div style={card}>
       <h3 style={cardTitle}>Create New Election</h3>
-      <input style={{ ...inp, marginBottom: 10 }} placeholder="Election name" value={name} onChange={e => setName(e.target.value)} />
-      <input style={{ ...inp, marginBottom: 10 }} placeholder="Voting duration (minutes, 0=no limit)" type="number" value={duration} onChange={e => setDuration(e.target.value)} />
+      <input style={{ ...inp, marginBottom: 10 }} placeholder="" value={name} onChange={e => setName(e.target.value)} />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
         <div>
-          <div style={sublabel}>Start Time (optional)</div>
+          <div style={sublabel}>Start Date & Time <span style={{ color: '#f87171' }}>*</span></div>
           <input style={inp} type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} />
         </div>
         <div>
-          <div style={sublabel}>End Time (optional)</div>
+          <div style={sublabel}>End Date & Time <span style={{ color: '#f87171' }}>*</span></div>
           <input style={inp} type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)} />
         </div>
       </div>
@@ -92,8 +92,20 @@ function CreateElectionForm({ onCreated, onError }) {
 }
 
 /* ─── edit election modal ─── */
+/* helper: convert ISO/UTC string to datetime-local value in local time */
+function toLocalDT(isoStr) {
+  if (!isoStr) return '';
+  try {
+    const d = new Date(isoStr);
+    const off = d.getTimezoneOffset();
+    const local = new Date(d.getTime() - off * 60000);
+    return local.toISOString().slice(0, 16);
+  } catch { return ''; }
+}
+
 function EditModal({ election, onSave, onClose }) {
-  const [duration, setDuration]   = useState('');
+  const [startTime, setStartTime] = useState(toLocalDT(election.start_time));
+  const [endTime, setEndTime]     = useState(toLocalDT(election.end_time));
   const [candidates, setCandidates] = useState((election.candidates || []).map((n, i) => ({ name: n, photo: election.candidate_photos?.[i] || '' })));
   const [saving, setSaving]       = useState(false);
   const [err, setErr]             = useState('');
@@ -104,12 +116,17 @@ function EditModal({ election, onSave, onClose }) {
   const submit = async () => {
     const cList = candidates.filter(c => c.name.trim());
     if (cList.length < 2) { setErr('At least 2 candidates required.'); return; }
+    if (!startTime) { setErr('Please set a start date & time.'); return; }
+    if (!endTime)   { setErr('Please set an end date & time.'); return; }
+    if (new Date(endTime) <= new Date(startTime)) { setErr('End time must be after start time.'); return; }
     setSaving(true); setErr('');
     try {
       await api.put(`/admin/election/${election.id}`, {
+        name: election.name,
         candidates: cList.map(c => c.name.trim()),
         candidate_photos: cList.map(c => c.photo.trim()),
-        duration_minutes: parseInt(duration) || undefined,
+        start_time: startTime,
+        end_time: endTime,
       });
       onSave('Election updated!');
     } catch (e) { setErr(e.response?.data?.error || 'Update failed.'); setSaving(false); }
@@ -123,7 +140,16 @@ function EditModal({ election, onSave, onClose }) {
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#8899aa', fontSize: 22, cursor: 'pointer' }}>×</button>
         </div>
         <div style={{ background: '#1e2a45', borderRadius: 8, padding: '12px 14px', marginBottom: 12, color: '#e6eef8', fontWeight: 600 }}>{election.name}</div>
-        <input style={{ ...inp, marginBottom: 14 }} type="number" placeholder="New duration (minutes, 0=no limit)" value={duration} onChange={e => setDuration(e.target.value)} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+          <div>
+            <div style={sublabel}>Start Date & Time <span style={{ color: '#f87171' }}>*</span></div>
+            <input style={inp} type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} />
+          </div>
+          <div>
+            <div style={sublabel}>End Date & Time <span style={{ color: '#f87171' }}>*</span></div>
+            <input style={inp} type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)} />
+          </div>
+        </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <span style={{ color: '#e6eef8', fontWeight: 700 }}>Candidates</span>
           <button onClick={addCandidate} style={{ background: 'none', border: '1px solid #6366f1', color: '#6366f1', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>+ Add</button>
@@ -226,7 +252,8 @@ function ElectionRow({ e, onDeleted, onEdited, onError }) {
   const [tallying, setTallying]     = useState(false);
 
   const now   = new Date();
-  const ended = e.end_time && now > new Date(e.end_time);
+  const started = !e.start_time || now > new Date(e.start_time);
+  const ended   = started && e.end_time && now > new Date(e.end_time);
 
   const tally = async () => {
     setTallying(true);
@@ -256,7 +283,7 @@ function ElectionRow({ e, onDeleted, onEdited, onError }) {
             <Btn color={showLive ? '#374151' : '#1d4ed8'} onClick={() => setShowLive(v => !v)}>{showLive ? '▲ Hide' : '▼ Show'}</Btn>
             <Btn color={showVoters ? '#374151' : '#1d4ed8'} onClick={() => setShowVoters(v => !v)}>{showVoters ? '▲ Hide Voters' : '▼ Show Voters'}</Btn>
             <Btn color='#b45309' onClick={() => setEditOpen(true)}>✏️ Edit</Btn>
-            {e.status === 'active' && <Btn color='#15803d' onClick={tally} disabled={tallying}>{tallying ? '…' : 'Tally'}</Btn>}
+            {e.status === 'active' && ended && <Btn color='#15803d' onClick={tally} disabled={tallying}>{tallying ? '…' : 'Tally'}</Btn>}
             <Btn color='#dc2626' onClick={del}>Delete</Btn>
           </div>
         </div>
@@ -318,24 +345,33 @@ export default function AdminPanel({ token, user, onLogout }) {
     try { const r = await api.get('/admin/pending-voters'); setVoters(r.data); } catch {}
   }, []);
 
-  useEffect(() => { Promise.all([loadElections(), loadVoters()]).finally(() => setLoading(false)); }, [loadElections, loadVoters]);
+  const voterTimerRef = useRef();
+  useEffect(() => {
+    Promise.all([loadElections(), loadVoters()]).finally(() => setLoading(false));
+    voterTimerRef.current = setInterval(loadVoters, 5000);
+    return () => clearInterval(voterTimerRef.current);
+  }, [loadElections, loadVoters]);
 
-  const approveVoter = async (id) => {
-    try { await api.post(`/admin/approve-voter/${id}`); flash('ok', 'Voter approved!'); loadVoters(); }
-    catch (e) { flash('err', e.response?.data?.error || 'Failed.'); }
+  const approveVoter = async (id, name) => {
+    try { await api.post(`/admin/approve-voter/${id}`); flash('ok', `✅ ${name} approved and added to users.csv`); loadVoters(); }
+    catch (e) { flash('err', e.response?.data?.error || 'Approval failed.'); }
   };
   const rejectVoter = async (id, name) => {
-    if (!window.confirm(`Reject "${name}"?`)) return;
-    try { await api.delete(`/admin/reject-voter/${id}`); flash('ok', 'Voter removed.'); loadVoters(); }
-    catch (e) { flash('err', e.response?.data?.error || 'Failed.'); }
+    if (!window.confirm(`Reject registration for "${name}"? This will permanently delete them.`)) return;
+    try { await api.delete(`/admin/reject-voter/${id}`); flash('ok', `🗑️ ${name} rejected and removed.`); loadVoters(); }
+    catch (e) { flash('err', e.response?.data?.error || 'Rejection failed.'); }
   };
-  const reloadCSV = async () => {
-    try { await api.post('/admin/reload-users'); flash('ok', 'Users reloaded from CSV.'); loadVoters(); }
-    catch { flash('err', 'Reload failed.'); }
+  const removeVoter = async (id, name) => {
+    if (!window.confirm(`Remove "${name}" from the voter list? This will delete them from the database and users.csv.`)) return;
+    try { await api.delete(`/admin/reject-voter/${id}`); flash('ok', `🗑️ ${name} removed from database and users.csv.`); loadVoters(); }
+    catch (e) { flash('err', e.response?.data?.error || 'Remove failed.'); }
   };
-
-  const pendingVoters  = voters.filter(v => !v.approved);
-  const approvedVoters = voters.filter(v =>  v.approved);
+  const sortByVoterId = (arr) => [...arr].sort((a, b) => {
+    const num = s => parseInt((s.voter_id || '').replace(/\D/g, ''), 10) || 0;
+    return num(a) - num(b);
+  });
+  const pendingVoters  = sortByVoterId(voters.filter(v => !v.approved));
+  const approvedVoters = sortByVoterId(voters.filter(v =>  v.approved));
 
   if (loading) return <div style={{ background: '#0d1117', minHeight: '100vh', color: '#8899aa', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading…</div>;
 
@@ -371,46 +407,98 @@ export default function AdminPanel({ token, user, onLogout }) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: voterOpen ? 16 : 0 }}>
             <h3 style={{ ...cardTitle, marginBottom: 0 }}>
               Voter Management
-              {pendingVoters.length > 0 && <span style={{ background: '#f59e0b22', color: '#f59e0b', border: '1px solid #f59e0b44', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, marginLeft: 10 }}>{pendingVoters.length} pending</span>}
+              {pendingVoters.length > 0 && (
+                <span style={{ background: '#f59e0b22', color: '#f59e0b', border: '1px solid #f59e0b44', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, marginLeft: 10 }}>
+                  {pendingVoters.length} pending
+                </span>
+              )}
             </h3>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={reloadCSV} style={{ padding: '6px 14px', background: 'none', border: '1px solid #2a3a5c', color: '#8899aa', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}>↻ Reload CSV</button>
               <button onClick={() => setVoterOpen(v => !v)} style={{ padding: '6px 14px', background: '#1e2a45', border: 'none', color: '#e6eef8', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
                 {voterOpen ? '▲ Hide' : '▼ Show Voters'}
               </button>
             </div>
           </div>
 
+          {/* Summary bar */}
+          <div style={{ display: 'flex', gap: 12, marginBottom: voterOpen ? 16 : 0, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, color: '#f59e0b', fontWeight: 600 }}>⏳ {pendingVoters.length} pending approval</span>
+            <span style={{ color: '#2a3a5c' }}>|</span>
+            <span style={{ fontSize: 13, color: '#22c55e', fontWeight: 600 }}>✅ {approvedVoters.length} approved</span>
+          </div>
+
           {voterOpen && (
             <>
-              {pendingVoters.length > 0 && (
-                <>
-                  <div style={{ ...sublabel, marginBottom: 8 }}>⏳ Pending Approval</div>
-                  {pendingVoters.map(v => (
-                    <div key={v.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#111827', borderRadius: 8, padding: '10px 14px', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
-                      <div>
-                        <strong style={{ color: '#e6eef8' }}>{v.name}</strong>
-                        <span style={{ color: '#8899aa', fontSize: 13, marginLeft: 10 }}>{v.phone} · {v.voter_id || '—'}</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <Btn color='#15803d' onClick={() => approveVoter(v.id)}>✓ Approve</Btn>
-                        <Btn color='#dc2626' onClick={() => rejectVoter(v.id, v.name)}>✗ Reject</Btn>
-                      </div>
-                    </div>
-                  ))}
-                  <div style={{ borderTop: '1px solid #1e2a45', margin: '14px 0' }} />
-                </>
-              )}
-              <div style={{ ...sublabel, marginBottom: 8 }}>✅ Approved Voters ({approvedVoters.length})</div>
-              {approvedVoters.map(v => (
-                <div key={v.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#111827', borderRadius: 8, padding: '10px 14px', marginBottom: 6 }}>
-                  <div>
-                    <strong style={{ color: '#e6eef8' }}>{v.name}</strong>
-                    <span style={{ color: '#8899aa', fontSize: 13, marginLeft: 10 }}>{v.phone}</span>
+              {/* ── Pending Approval ── */}
+              <div style={{ ...sublabel, marginBottom: 10 }}>⏳ Pending Approval ({pendingVoters.length})</div>
+              {pendingVoters.length === 0
+                ? <div style={{ color: '#8899aa', fontSize: 13, marginBottom: 16 }}>No pending registrations.</div>
+                : (
+                  <div style={{ overflowX: 'auto', marginBottom: 20 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: '#0f172a' }}>
+                          {['#', 'Name', 'Phone', 'Voter ID', 'DOB', 'Registered', 'Actions'].map(h => (
+                            <th key={h} style={th}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pendingVoters.map((v, i) => (
+                          <tr key={v.id} style={{ borderBottom: '1px solid #1e2a45' }} onMouseEnter={e => e.currentTarget.style.background='#1a2235'} onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+                            <td style={td}><span style={{ color: '#4a5a7a', fontWeight: 600 }}>{i + 1}</span></td>
+                            <td style={{ ...td, color: '#e6eef8', fontWeight: 700 }}>{v.name}</td>
+                            <td style={td}>{v.phone}</td>
+                            <td style={td}><span style={{ color: '#f59e0b', fontWeight: 600 }}>{v.voter_id || '—'}</span></td>
+                            <td style={td}>{v.dob || '—'}</td>
+                            <td style={td}>{v.created_at ? new Date(v.created_at).toLocaleString() : '—'}</td>
+                            <td style={{ ...td, whiteSpace: 'nowrap' }}>
+                              <button onClick={() => approveVoter(v.id, v.name)} style={actionBtn('#15803d')}>✓ Approve</button>
+                              <button onClick={() => rejectVoter(v.id, v.name)} style={{ ...actionBtn('#dc2626'), marginLeft: 6 }}>✗ Reject</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <span style={{ background: '#14532d', color: '#86efac', padding: '2px 10px', borderRadius: 999, fontSize: 12, fontWeight: 700 }}>Approved</span>
-                </div>
-              ))}
+                )
+              }
+
+              <div style={{ borderTop: '1px solid #1e2a45', margin: '4px 0 20px' }} />
+
+              {/* ── Approved Voters ── */}
+              <div style={{ ...sublabel, marginBottom: 10 }}>✅ Approved Voters ({approvedVoters.length})</div>
+              {approvedVoters.length === 0
+                ? <div style={{ color: '#8899aa', fontSize: 13 }}>No approved voters yet.</div>
+                : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: '#0f172a' }}>
+                          {['#', 'Name', 'Phone', 'Voter ID', 'DOB', 'Status', 'Actions'].map(h => (
+                            <th key={h} style={th}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {approvedVoters.map((v, i) => (
+                          <tr key={v.id} style={{ borderBottom: '1px solid #1e2a45' }} onMouseEnter={e => e.currentTarget.style.background='#1a2235'} onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+                            <td style={td}><span style={{ color: '#4a5a7a', fontWeight: 600 }}>{i + 1}</span></td>
+                            <td style={{ ...td, color: '#e6eef8', fontWeight: 700 }}>{v.name}</td>
+                            <td style={td}>{v.phone}</td>
+                            <td style={td}><span style={{ color: '#22c55e', fontWeight: 600 }}>{v.voter_id || '—'}</span></td>
+                            <td style={td}>{v.dob || '—'}</td>
+                            <td style={td}><span style={{ background: '#14532d', color: '#86efac', padding: '2px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700 }}>✅ Approved</span></td>
+                            <td style={td}>
+                              <button onClick={() => removeVoter(v.id, v.name)} style={actionBtn('#7f1d1d')}>🗑 Remove</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              }
             </>
           )}
         </div>
@@ -420,9 +508,15 @@ export default function AdminPanel({ token, user, onLogout }) {
 }
 
 /* ─── shared styles ─── */
-const inp = { width: '100%', padding: '10px 14px', background: '#0f172a', border: '1px solid #1e2a45', borderRadius: 8, color: '#e6eef8', fontSize: 14, outline: 'none', boxSizing: 'border-box' };
+const inp = { width: '100%', padding: '10px 14px', background: '#0f172a', border: '1px solid #1e2a45', borderRadius: 8, color: '#e6eef8', fontSize: 14, outline: 'none', boxSizing: 'border-box', colorScheme: 'dark' };
 const card = { background: '#161b2e', borderRadius: 12, padding: '20px', marginBottom: 20, border: '1px solid #1e2a45' };
 const cardTitle = { color: '#e6eef8', fontSize: 16, fontWeight: 700, marginBottom: 16, marginTop: 0 };
 const sublabel = { fontSize: 12, color: '#8899aa', fontWeight: 600, marginBottom: 4 };
+const detailChip = { fontSize: 12, color: '#8899aa', background: '#1e2a45', padding: '2px 8px', borderRadius: 6 };
+const infoRow  = { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#8899aa' };
+const infoIcon = { fontSize: 13, width: 18, textAlign: 'center', flexShrink: 0 };
+const th = { padding: '9px 12px', color: '#5b7cf6', fontWeight: 700, textAlign: 'left', borderBottom: '2px solid #1e2a45', whiteSpace: 'nowrap', fontSize: 12, letterSpacing: 0.5 };
+const td = { padding: '9px 12px', color: '#8899aa', verticalAlign: 'middle' };
+const actionBtn = (bg) => ({ padding: '4px 12px', background: bg, color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700, cursor: 'pointer', fontSize: 12 });
 const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 };
 const modalBox = { background: '#161b2e', borderRadius: 14, padding: 24, width: '100%', maxHeight: '90vh', overflowY: 'auto', border: '1px solid #1e2a45' };

@@ -245,6 +245,8 @@ def authenticate():
 @jwt_required()
 def list_elections():
     elections = get_all_elections()
+    current_user = _get_current_user()
+    user_id = current_user[0] if current_user else None
     result = []
     for e in elections:
         candidates_data = json.loads(e[2])
@@ -263,7 +265,8 @@ def list_elections():
             'status': e[3],
             'public_key': json.loads(e[4]) if e[4] else None,
             'end_time': e[6] if len(e) > 6 else None,
-            'start_time': e[7] if len(e) > 7 else None
+            'start_time': e[7] if len(e) > 7 else None,
+            'has_voted': has_voted(user_id, e[0]) if user_id else False,
         })
     return jsonify(result), 200
 
@@ -771,14 +774,19 @@ def _safe_csv_write(csv_path, rows):
         _csv_module.writer(f, lineterminator='\r\n').writerows(rows)
     os.replace(tmp_path, csv_path)
 
+CSV_HEADER = ['name', 'phone', 'role', 'email', 'password', 'voter_id', 'dob']
+
 def _csv_add_voter(csv_path, name, phone, voter_id, dob):
-    """Append voter to CSV, avoiding duplicates."""
+    """Append voter to CSV, avoiding duplicates. Always ensures header row exists."""
     def norm(p):
         return p.strip().replace(' ', '').replace('-', '').replace('+91', '').lstrip('0')
     rows = []
     if os.path.exists(csv_path):
         with open(csv_path, 'r', newline='', encoding='utf-8') as f:
             rows = list(_csv_module.reader(f))
+    # Ensure header is present
+    if not rows or rows[0] != CSV_HEADER:
+        rows = [CSV_HEADER] + [r for r in rows if r and r[0] != 'name']
     for r in rows[1:]:
         if len(r) >= 2 and norm(r[1]) == norm(phone):
             print(f"CSV: {name} already exists, skipping")

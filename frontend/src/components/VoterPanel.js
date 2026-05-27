@@ -1,15 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import api from '../api';
 import { useNavigate } from 'react-router-dom';
 
 function VoterPanel({ token, user }) {
   const [elections, setElections] = useState([]);
-  const [votedIds, setVotedIds] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const activeRef  = useRef(null);
+  const resultsRef = useRef(null);
+  const votedRef   = useRef(null);
 
-  useEffect(() => { fetchElections(); loadVotedIds(); }, []);
+  useEffect(() => { fetchElections(); }, []);
 
   const fetchElections = async () => {
     try {
@@ -17,13 +19,6 @@ function VoterPanel({ token, user }) {
       setElections(res.data);
     } catch { setError('Failed to load elections. Please try again.'); }
     finally { setLoading(false); }
-  };
-
-  const loadVotedIds = () => {
-    try {
-      const stored = localStorage.getItem(`voted_${user?.id}`);
-      if (stored) setVotedIds(JSON.parse(stored));
-    } catch { setVotedIds([]); }
   };
 
   const handleVote = (electionId) => navigate(`/vote/${electionId}`);
@@ -62,16 +57,13 @@ function VoterPanel({ token, user }) {
       <div className="vp-stats">
         {[
           { icon: '🗳️', value: activeElections.length, label: 'Active Elections', color: '#6CA2FF', glow: 'rgba(108,162,255,0.3)' },
-          { icon: '✅', value: votedIds.length,         label: 'Votes Cast',       color: '#8CFAC7', glow: 'rgba(140,250,199,0.3)' },
+          { icon: '✅', value: elections.filter(e => e.has_voted).length, label: 'Votes Cast', color: '#8CFAC7', glow: 'rgba(140,250,199,0.3)' },
           { icon: '📊', value: talliedElections.length, label: 'Results Ready',    color: '#FFA726', glow: 'rgba(255,167,38,0.3)'  },
         ].map((s, i) => (
           <div key={i} className="vp-stat-card" style={{ '--glow': s.glow, borderColor: `${s.color}33` }}
-            onClick={e => {
-              const el = e.currentTarget;
-              el.classList.remove('dancing');
-              void el.offsetWidth;
-              el.classList.add('dancing');
-              el.addEventListener('animationend', () => el.classList.remove('dancing'), { once: true });
+            onClick={() => {
+              const targets = [activeRef, votedRef, resultsRef];
+              targets[i]?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }}>
             <span className="vp-stat-icon">{s.icon}</span>
             <span className="vp-stat-num" style={{ color: s.color }}>{s.value}</span>
@@ -81,12 +73,12 @@ function VoterPanel({ token, user }) {
       </div>
 
       {/* Active Elections */}
-      <section className="vp-section">
+      <section className="vp-section" ref={activeRef}>
         <h2 className="vp-section-title"><span className="vp-dot" style={{ background: '#8CFAC7' }} />Active Elections</h2>
         {activeElections.length === 0
           ? <div className="vp-empty">No active elections at the moment.</div>
           : activeElections.map(e => {
-              const hasVoted   = votedIds.includes(e.id);
+              const hasVoted   = e.has_voted;
               const notStarted = e.start_time && new Date() < new Date(e.start_time);
               return (
                 <div key={e.id} className="vp-card">
@@ -111,7 +103,7 @@ function VoterPanel({ token, user }) {
 
       {/* Results */}
       {talliedElections.length > 0 && (
-        <section className="vp-section">
+        <section className="vp-section" ref={resultsRef}>
           <h2 className="vp-section-title"><span className="vp-dot" style={{ background: '#FFA726' }} />Results Available</h2>
           {talliedElections.map(e => (
             <div key={e.id} className="vp-card" style={{ opacity: 0.9 }}>
@@ -126,6 +118,9 @@ function VoterPanel({ token, user }) {
           ))}
         </section>
       )}
+
+      {/* Votes Cast anchor */}
+      <div ref={votedRef} />
 
       {/* Pending */}
       {pendingElections.length > 0 && (
@@ -200,16 +195,12 @@ const vpStyles = `
   .vp-spinner { width: 40px; height: 40px; border: 4px solid #27324F; border-top: 4px solid #6CA2FF; border-radius: 50%; animation: vp-spin 1s linear infinite; }
 
   /* Animations */
-  @keyframes vp-dance {
-    0%   { transform: translateY(0) rotate(0deg) scale(1); }
-    15%  { transform: translateY(-12px) rotate(-6deg) scale(1.08); }
-    30%  { transform: translateY(-18px) rotate(6deg) scale(1.12); }
-    45%  { transform: translateY(-8px) rotate(-4deg) scale(1.06); }
-    60%  { transform: translateY(-14px) rotate(5deg) scale(1.1); }
-    75%  { transform: translateY(-5px) rotate(-2deg) scale(1.04); }
-    90%  { transform: translateY(-10px) rotate(3deg) scale(1.06); }
-    100% { transform: translateY(0) rotate(0deg) scale(1); }
+  @keyframes vp-pulse {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(0.96); }
+    100% { transform: scale(1); }
   }
+  .vp-stat-card:active { animation: vp-pulse 0.15s ease; }
   @keyframes vp-spin { to { transform: rotate(360deg); } }
 `;
 
