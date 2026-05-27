@@ -309,9 +309,10 @@ function ResultsPanel({ id, initialResults }) {
 function ElectionRow({ e, onDeleted, onEdited, onError }) {
   const [showLive, setShowLive]         = useState(false);
   const [showVoters, setShowVoters]     = useState(false);
+  const [showResults, setShowResults]   = useState(e.status === 'tallied');
   const [editOpen, setEditOpen]         = useState(false);
   const [tallying, setTallying]         = useState(false);
-  const [tallyResults, setTallyResults] = useState(null); // populated after tally
+  const [tallyResults, setTallyResults] = useState(null);
 
   const now   = new Date();
   const started = !e.start_time || now > new Date(e.start_time);
@@ -322,7 +323,7 @@ function ElectionRow({ e, onDeleted, onEdited, onError }) {
     try {
       const r = await api.post(`/admin/tally-auto/${e.id}`);
       setTallyResults(r.data.results || {});
-      setShowLive(true); // open the panel to show results
+      setShowResults(true);
       onEdited('Tallied successfully! Results are shown below.');
     } catch (ex) { onError(ex.response?.data?.error || 'Tally failed.'); }
     finally { setTallying(false); }
@@ -344,8 +345,9 @@ function ElectionRow({ e, onDeleted, onEdited, onError }) {
           <span style={{ color: '#e6eef8', fontWeight: 700, fontSize: 15 }}>ID: {e.id} — {e.name}</span>
           {badge(e.status)}
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <Btn color={showLive ? '#374151' : '#1d4ed8'} onClick={() => setShowLive(v => !v)}>{showLive ? '▲ Hide' : '▼ Show'}</Btn>
+            <Btn color={showLive ? '#374151' : '#1d4ed8'} onClick={() => setShowLive(v => !v)}>{showLive ? '▲ Hide' : '▼ Live Count'}</Btn>
             <Btn color={showVoters ? '#374151' : '#1d4ed8'} onClick={() => setShowVoters(v => !v)}>{showVoters ? '▲ Hide Voters' : '▼ Show Voters'}</Btn>
+            <Btn color={showResults ? '#374151' : '#0e7490'} onClick={() => setShowResults(v => !v)}>🏆 {showResults ? '▲ Hide Results' : '▼ Results'}</Btn>
             <Btn color='#b45309' onClick={() => setEditOpen(true)}>✏️ Edit</Btn>
             {e.status === 'active' && ended && <Btn color='#15803d' onClick={tally} disabled={tallying}>{tallying ? '…' : 'Tally'}</Btn>}
             <Btn color='#dc2626' onClick={del}>Delete</Btn>
@@ -370,17 +372,19 @@ function ElectionRow({ e, onDeleted, onEdited, onError }) {
           <div style={{ color: '#22c55e', fontSize: 13, marginBottom: 8 }}>✅ Voting ended — ready to tally</div>
         )}
 
-        {/* results: always visible for tallied elections */}
-        {(e.status === 'tallied') && (
+        {/* live count: toggled by Show button */}
+        {showLive && (
           <div style={{ background: '#0f172a', borderRadius: 8, padding: '14px 16px', marginBottom: 8 }}>
-            <ResultsPanel id={e.id} initialResults={tallyResults || e.results} />
+            <LiveCount id={e.id} />
           </div>
         )}
 
-        {/* live count: only for active elections */}
-        {showLive && e.status !== 'tallied' && (
+        {/* results: toggled by Results button — works for any status */}
+        {showResults && (
           <div style={{ background: '#0f172a', borderRadius: 8, padding: '14px 16px', marginBottom: 8 }}>
-            <LiveCount id={e.id} />
+            {e.status === 'tallied'
+              ? <ResultsPanel id={e.id} initialResults={tallyResults || e.results} />
+              : <LiveCount id={e.id} />}
           </div>
         )}
 
