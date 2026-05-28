@@ -215,7 +215,7 @@ function VoterStatus({ id }) {
   useEffect(() => { fetch(); timerRef.current = setInterval(fetch, 10000); return () => clearInterval(timerRef.current); }, [fetch]);
 
   if (!data) return <div style={{ color: '#8899aa', fontSize: 13 }}>Loading voter status…</div>;
-  const voted = data.voters?.filter(v => v.has_voted).length || 0;
+  const voted = data.voters?.filter(v => v.voted).length || 0;
   const total = data.voters?.length || 0;
   return (
     <div>
@@ -234,7 +234,7 @@ function VoterStatus({ id }) {
               <td style={{ padding: '7px 10px', color: '#8899aa' }}>{v.phone}</td>
               <td style={{ padding: '7px 10px', color: '#8899aa' }}>{v.voter_id || '—'}</td>
               <td style={{ padding: '7px 10px' }}>
-                <span style={{ color: v.has_voted ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>{v.has_voted ? '✓ Voted' : 'Pending'}</span>
+                <span style={{ color: v.voted ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>{v.voted ? '✓ Voted' : 'Pending'}</span>
               </td>
             </tr>
           ))}
@@ -429,12 +429,12 @@ export default function AdminPanel({ token, user, onLogout }) {
 
   const approveVoter = async (id, name) => {
     try { await api.post(`/admin/approve-voter/${id}`); flash('ok', `✅ ${name} approved and added to users.csv`); loadVoters(); }
-    catch (e) { flash('err', e.response?.data?.error || 'Approval failed.'); }
+    catch (e) { console.error('Approve error:', e.response?.status, e.response?.data); flash('err', e.response?.data?.error || `Approval failed (${e.response?.status})`); }
   };
   const rejectVoter = async (id, name) => {
     if (!window.confirm(`Reject registration for "${name}"? This will permanently delete them.`)) return;
     try { await api.delete(`/admin/reject-voter/${id}`); flash('ok', `🗑️ ${name} rejected and removed.`); loadVoters(); }
-    catch (e) { flash('err', e.response?.data?.error || 'Rejection failed.'); }
+    catch (e) { console.error('Reject error:', e.response?.status, e.response?.data); flash('err', e.response?.data?.error || `Rejection failed (${e.response?.status})`); }
   };
   const removeVoter = async (id, name) => {
     if (!window.confirm(`Remove "${name}" from the voter list? This will delete them from the database and users.csv.`)) return;
@@ -504,6 +504,8 @@ export default function AdminPanel({ token, user, onLogout }) {
 
           {voterOpen && (
             <>
+              {msg && <div style={{ background: '#14532d', border: '1px solid #22c55e55', color: '#86efac', padding: '8px 14px', borderRadius: 8, marginBottom: 12, fontSize: 13 }}>{msg}</div>}
+              {err && <div style={{ background: '#450a0a', border: '1px solid #dc262655', color: '#fca5a5', padding: '8px 14px', borderRadius: 8, marginBottom: 12, fontSize: 13 }}>{err}</div>}
               {/* ── Pending Approval ── */}
               <div style={{ ...sublabel, marginBottom: 10 }}>⏳ Pending Approval ({pendingVoters.length})</div>
               {pendingVoters.length === 0

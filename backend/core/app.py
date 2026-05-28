@@ -748,12 +748,28 @@ def live_vote_count(election_id):
     }), 200
 
 
+_csv_last_mtime = 0
+
 @app.route('/admin/pending-voters', methods=['GET'])
 @jwt_required()
 def get_pending_voters():
+    global _csv_last_mtime
     u = _get_current_user()
     if not u or u[4] != 'admin':
         return jsonify({'error': 'Admin access required'}), 403
+
+    # Auto-sync from CSV if the file has changed since last check
+    csv_path = os.path.join(DATABASE_DIR, 'users.csv')
+    try:
+        mtime = os.path.getmtime(csv_path) if os.path.exists(csv_path) else 0
+        if mtime != _csv_last_mtime:
+            print(f"[CSV SYNC] File changed (mtime={mtime}), syncing...")
+            reload_users_from_csv()
+            _csv_last_mtime = mtime
+            print(f"[CSV SYNC] Done.")
+    except Exception as e:
+        print(f"CSV auto-sync error: {e}")
+
     conn = __import__('models').get_conn()
     c = conn.cursor()
     c.execute("SELECT id,name,phone,voter_id,dob,created_at,approved FROM users WHERE role='voter' ORDER BY created_at DESC")
@@ -792,7 +808,15 @@ def _csv_add_voter(csv_path, name, phone, voter_id, dob):
         if len(r) >= 2 and norm(r[1]) == norm(phone):
             print(f"CSV: {name} already exists, skipping")
             return
-    rows.append([name, phone, 'voter', '', '', voter_id or '', dob or ''])
+    def _fmt_dob(d):
+        if not d:
+            return ''
+        try:
+            from datetime import datetime
+            return datetime.strptime(d.strip(), '%Y-%m-%d').strftime('%d-%m-%Y')
+        except Exception:
+            return d  # already formatted or unrecognised, leave as-is
+    rows.append([name, phone, 'voter', '', '', voter_id or '', _fmt_dob(dob)])
     _safe_csv_write(csv_path, rows)
     print(f"CSV: added {name} ({phone})")
 

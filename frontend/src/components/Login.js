@@ -127,6 +127,7 @@ function Login({ onLogin }) {
               <label>Password</label>
               <div className="lg-pass-wrap">
                 <input type={showPass ? 'text' : 'password'} value={password}
+                  autoComplete="one-time-code" data-form-type="other"
                   onChange={(e) => setPassword(e.target.value)} style={{ paddingRight: '3rem' }} required />
                 <button type="button" className="lg-eye" onClick={() => setShowPass(p => !p)}>
                   {showPass
@@ -161,6 +162,7 @@ function Login({ onLogin }) {
               <label>Password</label>
               <div className="lg-pass-wrap">
                 <input type={showPass ? 'text' : 'password'} value={password}
+                  autoComplete="one-time-code" data-form-type="other"
                   onChange={(e) => setPassword(e.target.value)} style={{ paddingRight: '3rem' }} required />
                 <button type="button" className="lg-eye" onClick={() => setShowPass(p => !p)}>
                   {showPass

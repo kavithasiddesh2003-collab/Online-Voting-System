@@ -207,7 +207,84 @@ def seed_users_from_csv():
 
 
 def reload_users_from_csv():
-    seed_users_from_csv()
+    """
+    Full two-way sync from users.csv → database (voters only).
+    - New rows in CSV → inserted into DB
+    - Rows removed from CSV → deleted from DB (voter role only)
+    - Changed fields (voter_id, name, dob) → updated in DB
+    Admins are never touched.
+    """
+    if not os.path.exists(USERS_CSV):
+        return
+    from werkzeug.security import generate_password_hash
+
+    conn = get_conn()
+    c = conn.cursor()
+
+    # Read CSV into a dict keyed by normalised phone
+    def norm(p):
+        return (p or '').strip().replace(' ', '').replace('-', '')
+
+    csv_voters = {}
+    with open(USERS_CSV, newline='', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            role = (row.get('role') or 'voter').strip().lower()
+            if role != 'voter':
+                continue
+            phone = norm(row.get('phone', ''))
+            name  = (row.get('name') or '').strip()
+            if not name or not phone:
+                continue
+            csv_voters[phone] = {
+                'name':     name,
+                'phone':    row.get('phone', '').strip(),
+                'voter_id': (row.get('voter_id') or '').strip() or None,
+                'dob':      (row.get('dob') or '').strip() or None,
+                'password': (row.get('password') or '').strip() or None,
+            }
+
+    # Fetch all current voters from DB
+    c.execute("SELECT id, name, phone, voter_id, dob FROM users WHERE role='voter'")
+    db_voters = {norm(r[2]): {'id': r[0], 'name': r[1], 'phone': r[2], 'voter_id': r[3], 'dob': r[4]} for r in c.fetchall()}
+
+    # 1. Delete voters in DB but not in CSV
+    for phone, dbv in db_voters.items():
+        if phone not in csv_voters:
+            c.execute("DELETE FROM votes WHERE user_id=?", (dbv['id'],))
+            c.execute("DELETE FROM users WHERE id=? AND role='voter'", (dbv['id'],))
+
+    # 2. Update changed fields for existing voters
+    for phone, row in csv_voters.items():
+        if phone in db_voters:
+            dbv = db_voters[phone]
+            if (row['name'] != dbv['name'] or
+                row['voter_id'] != dbv['voter_id'] or
+                row['dob'] != dbv['dob']):
+                c.execute(
+                    "UPDATE users SET name=?, voter_id=?, dob=? WHERE id=? AND role='voter'",
+                    (row['name'], row['voter_id'], row['dob'], dbv['id'])
+                )
+
+    # 3. Insert new voters from CSV not yet in DB
+    for phone, row in csv_voters.items():
+        if phone not in db_voters:
+            pwd_hash = generate_password_hash(row['password']) if row['password'] else None
+            if not pwd_hash and row['name'] and row['dob']:
+                try:
+                    name_part = row['name'].strip().lower().replace(' ', '')[:4]
+                    dob_parts = row['dob'].replace('/', '-').split('-')
+                    day_part = dob_parts[2] if len(dob_parts[0]) == 4 else dob_parts[0]
+                    pwd_hash = generate_password_hash(name_part + day_part.zfill(2))
+                except Exception:
+                    pass
+            c.execute(
+                "INSERT OR IGNORE INTO users (name,phone,voter_id,dob,password_hash,role,approved) VALUES (?,?,?,?,?,?,1)",
+                (row['name'], row['phone'], row['voter_id'], row['dob'], pwd_hash, 'voter')
+            )
+
+    conn.commit()
+    conn.close()
 
 
 def get_user(phone):
@@ -325,6 +402,15 @@ def delete_election(election_id):
     c = conn.cursor()
     c.execute(f"DELETE FROM votes WHERE election_id={PH}", (election_id,))
     c.execute(f"DELETE FROM elections WHERE id={PH}", (election_id,))
+    if not USE_MYSQL:
+        # Reset autoincrement so next election gets the lowest available ID
+        c.execute("SELECT MAX(id) FROM elections")
+        row = c.fetchone()
+        max_id = row[0] if row and row[0] is not None else 0
+        c.execute(
+            "UPDATE sqlite_sequence SET seq=? WHERE name='elections'",
+            (max_id,)
+        )
     conn.commit()
     conn.close()
 
