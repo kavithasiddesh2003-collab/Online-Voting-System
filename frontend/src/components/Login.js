@@ -83,6 +83,10 @@ function Login({ onLogin }) {
         .lg-field input { background: rgba(0,30,70,0.6); border: 1px solid rgba(0,229,255,0.2); color: #e0f4ff; font-family: 'Rajdhani', sans-serif; font-size: 1rem; padding: 0.75rem 1rem; outline: none; transition: all 0.25s ease; border-radius: 2px; width: 100%; }
         .lg-field input:focus { border-color: rgba(0,229,255,0.6); background: rgba(0,40,90,0.6); box-shadow: 0 0 16px rgba(0,229,255,0.12); }
         .lg-pass-wrap { position: relative; }
+        .lg-pass-wrap input::-ms-reveal,
+        .lg-pass-wrap input::-ms-clear,
+        .lg-pass-wrap input::-webkit-credentials-auto-fill-button,
+        .lg-pass-wrap input::-webkit-contacts-auto-fill-button { display: none !important; }
         .lg-eye { position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: rgba(0,229,255,0.5); padding: 0.2rem; display: flex; align-items: center; }
         .lg-eye:hover { color: #00e5ff; }
         .lg-otp-row { display: flex; align-items: flex-end; gap: 0.8rem; margin-bottom: 1rem; }

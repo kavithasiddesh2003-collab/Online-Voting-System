@@ -34,6 +34,11 @@ function Register() {
     if (!fullName.trim())              { setError('Enter your full name.'); return; }
     if (!phone || phone.length !== 10) { setError('Enter a valid 10-digit phone number.'); return; }
     if (!dob)                          { setError('Date of birth is required.'); return; }
+    const today = new Date();
+    const birth = new Date(dob);
+    const age = today.getFullYear() - birth.getFullYear() -
+      (today < new Date(today.getFullYear(), birth.getMonth(), birth.getDate()) ? 1 : 0);
+    if (age < 18)                      { setError('You must be at least 18 years old to register.'); return; }
     if (!password)                     { setError('Please enter your password.'); return; }
     if (password !== confirm)          { setError('Passwords do not match.'); return; }
     try {

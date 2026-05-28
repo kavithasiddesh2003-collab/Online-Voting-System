@@ -126,6 +126,17 @@ def register():
 
     if not raw_phone or not name:
         return jsonify({'error': 'Name and phone number are required'}), 400
+    if not dob:
+        return jsonify({'error': 'Date of birth is required'}), 400
+    try:
+        from datetime import date
+        birth = date.fromisoformat(dob)
+        today = date.today()
+        age = today.year - birth.year - ((today.month, today.day) < (birth.month, birth.day))
+        if age < 18:
+            return jsonify({'error': 'You must be at least 18 years old to register.'}), 400
+    except ValueError:
+        return jsonify({'error': 'Invalid date of birth format.'}), 400
     phone = _normalize_phone(raw_phone)
 
     existing = get_user(phone)
