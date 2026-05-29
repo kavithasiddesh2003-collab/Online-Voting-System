@@ -218,9 +218,6 @@ function VoterPanel({ token, user }) {
                         <span className="vp-voted-tick">✅</span>
                         <span className="vp-voted-text">
                           Voted
-                          {savedVote && (
-                            <span className="vp-voted-for"> for {savedVote}</span>
-                          )}
                         </span>
                       </div>
 

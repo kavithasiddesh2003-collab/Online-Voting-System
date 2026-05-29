@@ -325,7 +325,12 @@ function ElectionRow({ e, onDeleted, onEdited, onError }) {
       setTallyResults(r.data.results || {});
       setShowResults(true);
       onEdited('Tallied successfully! Results are shown below.');
-    } catch (ex) { onError(ex.response?.data?.error || 'Tally failed.'); }
+    } catch (ex) {
+      const msg = ex.response?.data?.error || ex.message || 'Tally failed.';
+      console.error('Tally error:', ex.response?.status, ex.response?.data);
+      alert('Tally failed: ' + msg);
+      onError(msg);
+    }
     finally { setTallying(false); }
   };
 
@@ -589,9 +594,6 @@ const inp = { width: '100%', padding: '10px 14px', background: '#0f172a', border
 const card = { background: '#161b2e', borderRadius: 12, padding: '20px', marginBottom: 20, border: '1px solid #1e2a45' };
 const cardTitle = { color: '#e6eef8', fontSize: 16, fontWeight: 700, marginBottom: 16, marginTop: 0 };
 const sublabel = { fontSize: 12, color: '#8899aa', fontWeight: 600, marginBottom: 4 };
-const detailChip = { fontSize: 12, color: '#8899aa', background: '#1e2a45', padding: '2px 8px', borderRadius: 6 };
-const infoRow  = { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#8899aa' };
-const infoIcon = { fontSize: 13, width: 18, textAlign: 'center', flexShrink: 0 };
 const th = { padding: '9px 12px', color: '#5b7cf6', fontWeight: 700, textAlign: 'left', borderBottom: '2px solid #1e2a45', whiteSpace: 'nowrap', fontSize: 12, letterSpacing: 0.5 };
 const td = { padding: '9px 12px', color: '#8899aa', verticalAlign: 'middle' };
 const actionBtn = (bg) => ({ padding: '4px 12px', background: bg, color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700, cursor: 'pointer', fontSize: 12 });
