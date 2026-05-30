@@ -64,7 +64,7 @@ function Register() {
         .rg-root {
           min-height: 100vh; width: 100vw; background: #020b1a;
           display: flex; align-items: center; justify-content: center;
-          font-family: 'Rajdhani', sans-serif; position: relative; overflow-x: hidden; padding: 5rem 1rem 4rem;
+          font-family: 'Rajdhani', sans-serif; position: relative; overflow-x: hidden; padding: 3.5rem 1rem 2.5rem;
         }
         .rg-root::before {
           content: ''; position: fixed; inset: 0;
@@ -76,17 +76,17 @@ function Register() {
         .rg-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; display: flex; align-items: center; justify-content: flex-end; padding: 1rem 2rem; background: rgba(2,11,26,0.7); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(0,229,255,0.10); }
         .rg-back { font-family: 'Orbitron', monospace; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.12em; padding: 0.45rem 1.2rem; border-radius: 3px; cursor: pointer; text-transform: uppercase; transition: all 0.25s ease; background: transparent; border: 1px solid rgba(0,229,255,0.4); color: #00e5ff; text-decoration: none; }
         .rg-back:hover { background: rgba(0,229,255,0.08); box-shadow: 0 0 16px rgba(0,229,255,0.3); }
-        .rg-card { position: relative; z-index: 10; width: 100%; max-width: 500px; padding: 2.5rem 2.8rem; background: rgba(0,18,45,0.75); border: 1px solid rgba(0,229,255,0.18); backdrop-filter: blur(16px); animation: rg-fadeUp 0.8s ease both; }
+        .rg-card { position: relative; z-index: 10; width: 100%; max-width: 500px; padding: 1.5rem 2.8rem; background: rgba(0,18,45,0.75); border: 1px solid rgba(0,229,255,0.18); backdrop-filter: blur(16px); animation: rg-fadeUp 0.8s ease both; }
         .rg-c { position: absolute; width: 18px; height: 18px; border-color: #00e5ff; border-style: solid; }
         .rg-c-tl { top:-1px; left:-1px; border-width:2px 0 0 2px; }
         .rg-c-tr { top:-1px; right:-1px; border-width:2px 2px 0 0; }
         .rg-c-bl { bottom:-1px; left:-1px; border-width:0 0 2px 2px; }
         .rg-c-br { bottom:-1px; right:-1px; border-width:0 2px 2px 0; }
         .rg-card-label { position: absolute; top: -0.65rem; left: 50%; transform: translateX(-50%); font-family: 'Orbitron', monospace; font-size: 0.48rem; letter-spacing: 0.28em; color: #00e5ff; background: #020b1a; padding: 0 0.8rem; white-space: nowrap; opacity: 0.75; }
-        .rg-title { font-family: 'Orbitron', monospace; font-size: 1.4rem; font-weight: 900; color: #fff; letter-spacing: 0.06em; text-align: center; text-shadow: 0 0 20px rgba(0,229,255,0.3); margin-bottom: 1.5rem; }
-        .rg-field { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 1rem; }
+        .rg-title { font-family: 'Orbitron', monospace; font-size: 1.4rem; font-weight: 900; color: #fff; letter-spacing: 0.06em; text-align: center; text-shadow: 0 0 20px rgba(0,229,255,0.3); margin-bottom: 0.8rem; }
+        .rg-field { display: flex; flex-direction: column; gap: 0.2rem; margin-bottom: 0.6rem; }
         .rg-field label { font-family: 'Orbitron', monospace; font-size: 0.52rem; letter-spacing: 0.2em; color: rgba(0,229,255,0.6); text-transform: uppercase; }
-        .rg-input { background: rgba(0,30,70,0.6); border: 1px solid rgba(0,229,255,0.2); color: #e0f4ff; font-family: 'Rajdhani', sans-serif; font-size: 1rem; padding: 0.75rem 1rem; outline: none; transition: all 0.25s ease; border-radius: 2px; letter-spacing: 0.04em; width: 100%; }
+        .rg-input { background: rgba(0,30,70,0.6); border: 1px solid rgba(0,229,255,0.2); color: #e0f4ff; font-family: 'Rajdhani', sans-serif; font-size: 1rem; padding: 0.5rem 1rem; outline: none; transition: all 0.25s ease; border-radius: 2px; letter-spacing: 0.04em; width: 100%; }
         .rg-input::placeholder { color: rgba(180,220,255,0.25); }
         .rg-input:focus { border-color: rgba(0,229,255,0.6); background: rgba(0,40,90,0.6); box-shadow: 0 0 16px rgba(0,229,255,0.12); }
         .rg-input[type="date"] { color-scheme: dark; }
@@ -95,7 +95,7 @@ function Register() {
         .rg-input[type="date"]::-webkit-datetime-edit-fields-wrapper { color: #e0f4ff; }
         .rg-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
         .rg-phone-row { display: flex; align-items: stretch; }
-        .rg-prefix { padding: 0.75rem 0.9rem; background: rgba(0,229,255,0.08); border: 1px solid rgba(0,229,255,0.2); border-right: none; border-radius: 2px 0 0 2px; color: #00e5ff; font-family: 'Rajdhani', sans-serif; font-size: 1rem; user-select: none; white-space: nowrap; }
+        .rg-prefix { padding: 0.5rem 0.9rem; background: rgba(0,229,255,0.08); border: 1px solid rgba(0,229,255,0.2); border-right: none; border-radius: 2px 0 0 2px; color: #00e5ff; font-family: 'Rajdhani', sans-serif; font-size: 1rem; user-select: none; white-space: nowrap; }
         .rg-pass-wrap { position: relative; }
         .rg-pass-wrap .rg-input { padding-right: 3rem; }
         .rg-pass-wrap .rg-input::-ms-reveal,
@@ -106,7 +106,7 @@ function Register() {
         .rg-eye:hover { color: #00e5ff; }
         .rg-hint { font-size: 0.78rem; color: rgba(0,229,255,0.45); margin-top: 0.3rem; letter-spacing: 0.02em; font-family: 'Rajdhani', sans-serif; }
         .rg-hint strong { color: rgba(0,229,255,0.75); }
-        .rg-checkbox { display: flex; align-items: center; gap: 0.6rem; margin: 1rem 0; cursor: pointer; }
+        .rg-checkbox { display: flex; align-items: center; gap: 0.6rem; margin: 0.5rem 0; cursor: pointer; }
         .rg-checkbox input { accent-color: #00e5ff; width: 15px; height: 15px; }
         .rg-checkbox span { font-size: 0.85rem; color: rgba(180,220,255,0.5); }
         .rg-checkbox a { color: #00e5ff; text-decoration: none; }
@@ -138,7 +138,7 @@ function Register() {
       <div className="rg-card">
         <span className="rg-c rg-c-tl" /><span className="rg-c rg-c-tr" />
         <span className="rg-c rg-c-bl" /><span className="rg-c rg-c-br" />
-        <div className="rg-card-label">// VOTER REGISTRATION</div>
+        <div className="rg-card-label">{"// VOTER REGISTRATION"}</div>
         <div className="rg-title">Register</div>
 
         <form onSubmit={handleSubmit} autoComplete="off">
@@ -232,7 +232,7 @@ function Register() {
             <div className="rg-modal" onClick={e => e.stopPropagation()}>
               <span className="rg-c rg-c-tl" /><span className="rg-c rg-c-tr" />
               <span className="rg-c rg-c-bl" /><span className="rg-c rg-c-br" />
-              <div className="rg-modal-title">// TERMS & PRIVACY POLICY</div>
+              <div className="rg-modal-title">{"// TERMS & PRIVACY POLICY"}</div>
 
               <h3>1. Acceptance of Terms</h3>
               <p>By registering and participating in the SecureVote Online Voting System, you agree to be bound by these Terms and Conditions. If you do not agree, you may not register or cast a vote.</p>

@@ -174,7 +174,6 @@ function VoterPanel({ token, user }) {
           ? <div className="vp-empty">No active elections at the moment.</div>
           : activeElections.map(e => {
               const hasVoted  = e.has_voted;
-              const savedVote = hasVoted ? getSavedVote(user?.id, e.id) : null;
               const { start, end, notStarted, ended, open } = electionState(e);
 
               return (
@@ -186,8 +185,8 @@ function VoterPanel({ token, user }) {
                     <h3 className="vp-election-name">{e.name}</h3>
                     <div className="vp-chips">
                       {e.candidates.map((c, i) => (
-                        <span key={i} className={`vp-chip ${savedVote === c ? 'vp-chip-voted' : ''}`}>
-                          {savedVote === c ? '✓ ' : ''}{c}
+                        <span key={i} className="vp-chip">
+                          {c}
                         </span>
                       ))}
                     </div>
@@ -422,11 +421,6 @@ const vpStyles = `
     padding: 0.18rem 0.6rem; border-radius: 999px;
     font-size: clamp(0.7rem, 2.5vw, 0.8rem);
     transition: background 0.2s, color 0.2s;
-  }
-  /* Highlight the chip the voter chose */
-  .vp-chip-voted {
-    background: #1B3A2F; border-color: #2E6B50;
-    color: #8CFAC7; font-weight: 700;
   }
   .vp-time { margin: 0.4rem 0 0; font-size: clamp(0.72rem, 2.5vw, 0.82rem); color: #FFF59D; }
   .vp-countdown { font-weight: 600; font-family: 'Orbitron', monospace; font-size: 0.75em; }

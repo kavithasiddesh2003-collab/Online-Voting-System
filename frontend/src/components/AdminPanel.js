@@ -533,7 +533,7 @@ export default function AdminPanel({ token, user, onLogout }) {
                             <td style={td}>{v.phone}</td>
                             <td style={td}><span style={{ color: '#f59e0b', fontWeight: 600 }}>{v.voter_id || '—'}</span></td>
                             <td style={td}>{v.dob || '—'}</td>
-                            <td style={td}>{v.created_at ? new Date(v.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : '—'}</td>
+                            <td style={td}>{v.created_at ? new Date(v.created_at.replace(' ', 'T') + 'Z').toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : '—'}</td>
                             <td style={{ ...td, whiteSpace: 'nowrap' }}>
                               <button onClick={() => approveVoter(v.id, v.name)} style={actionBtn('#15803d')}>✓ Approve</button>
                               <button onClick={() => rejectVoter(v.id, v.name)} style={{ ...actionBtn('#dc2626'), marginLeft: 6 }}>✗ Reject</button>
