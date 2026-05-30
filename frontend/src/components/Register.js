@@ -41,7 +41,7 @@ function Register() {
     if (age < 18)                      { setError('You must be at least 18 years old to register.'); return; }
     if (!passwordReady)                 { setError('Please enter your full name and date of birth first to set your password.'); return; }
     if (!password)                     { setError('Please enter your password.'); return; }
-    if (password !== autoPassword)     { setError(`Password must be the first 4 letters of your name + day of birth (e.g. "${autoPassword}").`); return; }
+    if (password !== autoPassword)     { setError('Password must follow the format: first 4 letters of your name + day of birth.'); return; }
     if (password !== confirm)          { setError('Passwords do not match.'); return; }
     try {
       const response = await api.post('/register', {
@@ -195,7 +195,6 @@ function Register() {
             </div>
             <div className="rg-hint">
               🔑 Password format: <strong>first 4 letters of your name</strong> + <strong>day of birth</strong>
-              {passwordReady && <span style={{ color: 'rgba(0,229,255,0.9)' }}> &nbsp;→ <strong>{autoPassword}</strong></span>}
             </div>
             {password && passwordReady && password !== autoPassword && (
               <div className="rg-hint" style={{ color: 'rgba(255,107,107,0.8)', marginTop: '0.2rem' }}>

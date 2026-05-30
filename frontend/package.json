@@ -14,7 +14,7 @@
     "cross-env": "^7.0.3"
   },
   "scripts": {
-    "start": "cross-env NODE_OPTIONS=--no-deprecation react-scripts start",
+    "start": "cross-env NODE_OPTIONS=--no-deprecation react-scripts start 2>&1 | node -e \"process.stdin.resume();process.stdin.setEncoding('utf8');let b='';process.stdin.on('data',d=>{b+=d;let l=b.split('\\n');b=l.pop();l.forEach(x=>{if(!x.match(/npm run build|Note that the development|To create a production/))console.log(x)});});process.stdin.on('end',()=>{if(b&&!b.match(/npm run build|Note that the development|To create a production/))console.log(b);});\"",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
