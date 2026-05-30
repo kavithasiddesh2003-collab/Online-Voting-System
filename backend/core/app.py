@@ -15,17 +15,30 @@ load_dotenv(os.path.join(_BACKEND_DIR, ".env"))
 from models import (
     init_db, get_user, get_admin_by_email, get_election, create_election,
     update_election, get_all_elections, has_voted, mark_voted,
-    reload_users_from_csv, delete_election, get_all_users
+    reload_users_from_csv, delete_election, get_all_users, get_conn   # FIX #8: import get_conn
 )
 from crypto import (
     PaillierCrypto, generate_trustee_shares, combine_shares, sign_data
 )
-from auth import generate_otp, verify_otp, send_otp
+from auth import (
+    generate_otp, verify_otp, send_otp,
+    store_otp, get_otp_record, increment_otp_attempts, delete_otp
+)
 
 app = Flask(__name__)
-app.config["JWT_SECRET_KEY"] = os.getenv(
-    "JWT_SECRET_KEY", "dev-secret-key-change-in-production"
-)
+
+# FIX #2: Fail loudly if JWT secret is missing — never silently use a weak default in production
+_jwt_secret = os.getenv("JWT_SECRET_KEY", "")
+if not _jwt_secret:
+    import warnings
+    warnings.warn(
+        "JWT_SECRET_KEY is not set. Using an insecure dev default. "
+        "Set JWT_SECRET_KEY in your .env before deploying.",
+        stacklevel=1,
+    )
+    _jwt_secret = "dev-secret-key-DO-NOT-USE-IN-PRODUCTION"
+
+app.config["JWT_SECRET_KEY"] = _jwt_secret
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=2)
 CORS(app,
      resources={r"/*": {"origins": "*"}},
@@ -79,16 +92,12 @@ else:
     except Exception:
         _write_bulletin_safe([])
 
-otp_store = {}
-
-
 def _normalize_phone(raw):
     """Strip spaces/dashes and ensure E.164 format (+<digits>)."""
     phone = raw.strip().replace(" ", "").replace("-", "")
     if not phone.startswith("+"):
         phone = "+" + phone
     return phone
-
 
 
 def _parse_candidates(candidates_json):
@@ -108,7 +117,6 @@ def _get_current_user():
         email = identity[len("admin:"):]
         admin = get_admin_by_email(email)
         if admin:
-            # Return same shape as get_user: (id, name, identifier, created_at, role)
             return (admin[0], admin[1], admin[2], None, admin[4])
         return None
     return get_user(identity)
@@ -145,9 +153,8 @@ def register():
 
     pwd_hash = generate_password_hash(password) if password else None
 
-    # Insert new voter directly into DB (approved=0, pending admin approval)
     try:
-        conn = __import__('models').get_conn()
+        conn = get_conn()
         c = conn.cursor()
         c.execute(
             "INSERT INTO users (name, phone, voter_id, dob, password_hash, role, approved) VALUES (?, ?, ?, ?, ?, 'voter', 0)",
@@ -174,7 +181,7 @@ def request_otp_route():
     if not user[5]:  # approved column
         return jsonify({'error': 'Your account is pending admin approval. You cannot log in yet.'}), 403
     code = generate_otp(phone)
-    otp_store[phone] = {'otp': code, 'timestamp': time.time(), 'attempts': 0}
+    store_otp(phone, code)
     send_otp(phone, code)
     return jsonify({'message': 'OTP sent'}), 200
 
@@ -201,10 +208,8 @@ def admin_login():
     admin = get_admin_by_email(email)
     if not admin:
         return jsonify({'error': 'Admin account not found'}), 403
-    # admin = (id, name, email, password_hash, role)
     if not admin[3] or not check_password_hash(admin[3], password):
         return jsonify({'error': 'Invalid password'}), 401
-    # Use email as JWT identity for admins
     token = create_access_token(identity=f"admin:{email}")
     return jsonify({
         'token': token,
@@ -222,32 +227,29 @@ def authenticate():
     if not raw_phone or not password or not otp_input:
         return jsonify({'error': 'Phone number, password, and OTP are all required'}), 400
     phone = _normalize_phone(raw_phone)
-    # 1. Check user exists
     user = get_user(phone)
     if not user:
         return jsonify({'error': 'Phone number not registered. Please register first.'}), 404
-    # 2. Check approved
     if not user[5]:
         return jsonify({'error': 'Your account is pending admin approval. Please wait.'}), 403
-    # 3. Check password
-    conn = __import__('models').get_conn()
+    conn = get_conn()
     row = conn.execute("SELECT password_hash FROM users WHERE phone=?", (phone,)).fetchone()
     conn.close()
     if not row or not row[0] or not check_password_hash(row[0], password):
         return jsonify({'error': 'Incorrect password.'}), 401
-    # 4. Check OTP
-    if phone not in otp_store:
+    rec = get_otp_record(phone)
+    if not rec:
         return jsonify({'error': 'No OTP found. Please request an OTP first.'}), 400
-    rec = otp_store[phone]
     if rec['attempts'] >= 3:
         return jsonify({'error': 'Too many OTP attempts. Request a new one.'}), 429
     if time.time() - rec['timestamp'] > 300:
-        del otp_store[phone]
+        delete_otp(phone)
         return jsonify({'error': 'OTP expired. Please request a new one.'}), 401
     if not verify_otp(phone, otp_input, rec['otp']):
-        rec['attempts'] += 1
-        return jsonify({'error': f'Invalid OTP. {3 - rec["attempts"]} attempts left.'}), 401
-    del otp_store[phone]
+        increment_otp_attempts(phone)
+        remaining = 3 - (rec['attempts'] + 1)
+        return jsonify({'error': f'Invalid OTP. {remaining} attempts left.'}), 401
+    delete_otp(phone)
     token = create_access_token(identity=phone)
     return jsonify({'token': token, 'user': {'id': user[0], 'name': user[1], 'phone': user[2], 'role': user[4]}}), 200
 
@@ -261,7 +263,6 @@ def list_elections():
     result = []
     for e in elections:
         candidates_data = json.loads(e[2])
-        # candidates_data can be a list of names or list of dicts with name/photo
         if candidates_data and isinstance(candidates_data[0], dict):
             names  = [c['name'] for c in candidates_data]
             photos = [c.get('photo', '') for c in candidates_data]
@@ -296,13 +297,11 @@ def create_new_election():
     candidate_photos = data.get('candidate_photos', [])
     end_time_raw = data.get('end_time', None)
     start_time_raw = data.get('start_time', None)
-    # Legacy support: also accept duration_minutes
     duration_minutes = data.get('duration_minutes', 0)
 
     if not name or not isinstance(candidates, list) or len(candidates) < 2:
         return jsonify({'error': 'Invalid election data'}), 400
 
-    # Store candidates as list of dicts with name and photo
     candidates_with_photos = [
         {'name': c, 'photo': candidate_photos[i] if i < len(candidate_photos) else ''}
         for i, c in enumerate(candidates)
@@ -314,16 +313,13 @@ def create_new_election():
     shares = generate_trustee_shares(private_key, n_shares=3, threshold=2)
 
     def parse_iso(raw):
-        """Parse ISO datetime and store as UTC ISO string (with Z suffix)."""
         if not raw:
             return None
         try:
             parsed = datetime.fromisoformat(raw.replace('Z', '+00:00'))
             if parsed.utcoffset() is not None:
-                # timezone-aware: convert to UTC naive
                 utc = parsed.replace(tzinfo=None) - parsed.utcoffset()
             else:
-                # naive datetime from frontend datetime-local input is local IST, convert to UTC
                 utc = parsed - IST_OFFSET
             return utc.isoformat() + 'Z'
         except Exception:
@@ -333,7 +329,7 @@ def create_new_election():
     start_time = parse_iso(start_time_raw)
 
     if not end_time and duration_minutes and duration_minutes > 0:
-        end_time = (datetime.utcnow() + timedelta(minutes=duration_minutes)).isoformat() + 'Z' 
+        end_time = (datetime.utcnow() + timedelta(minutes=duration_minutes)).isoformat() + 'Z'
 
     print(f"DEBUG CREATE: start_time_raw={start_time_raw!r} -> start_time={start_time!r}, end_time_raw={end_time_raw!r} -> end_time={end_time!r}")
     eid = create_election(name, json.dumps(candidates_with_photos), json.dumps(public_key_str), end_time, start_time)
@@ -378,7 +374,6 @@ def delete_election_route(election_id):
 
     delete_election(election_id)
 
-    # Clean trustee shares
     if os.path.exists(TRUSTEE_FILE):
         try:
             with open(TRUSTEE_FILE, 'r', encoding='utf-8') as f:
@@ -390,7 +385,6 @@ def delete_election_route(election_id):
         except Exception:
             pass
 
-    # Clean bulletin entries for this election
     try:
         bulletin = _read_bulletin_safe()
         cleaned = [v for v in bulletin if v.get('election_id') != election_id]
@@ -443,7 +437,7 @@ def edit_election_route(election_id):
     end_time = parse_iso(end_time_raw)
     start_time = parse_iso(start_time_raw)
 
-    conn = __import__('models').get_conn()
+    conn = get_conn()
     c = conn.cursor()
     c.execute(
         "UPDATE elections SET name=?, candidates_json=?, end_time=?, start_time=? WHERE id=?",
@@ -508,22 +502,73 @@ def cast_vote():
     if len(e) > 7 and e[7]:
         start_time = datetime.fromisoformat(e[7].replace('Z', ''))
         if now_utc < start_time:
-            # Display in IST for user-friendly message
             start_ist = start_time + IST_OFFSET
             return jsonify({'error': f'Voting has not started yet. It begins on {start_ist.strftime("%d/%m/%Y at %I:%M %p")} IST'}), 403
 
+    # FIX #3: Validate ciphertext structure but do NOT store candidate_index in plaintext.
+    # The bulletin board entry only stores the encrypted value — candidate choice stays private.
+    try:
+        cdata = json.loads(ciphertext)
+        candidate_index = int(cdata['candidate_index'])
+        candidates = _parse_candidates(e[2])
+        if candidate_index < 0 or candidate_index >= len(candidates):
+            return jsonify({'error': 'Invalid candidate index'}), 400
+        # Store only the encrypted value — drop the plaintext candidate_index from the bulletin
+        encrypted_value = str(cdata['value'])
+        if not encrypted_value.isdigit():
+            return jsonify({'error': 'Invalid ciphertext value'}), 400
+    except (KeyError, ValueError, json.JSONDecodeError) as ex:
+        return jsonify({'error': f'Malformed ciphertext: {str(ex)}'}), 400
+
+    # Build a private server-side mapping so tally still works:
+    # we store per-candidate encrypted tallies in a separate server structure,
+    # but the public bulletin only shows the encrypted value without the index.
     entry = {
         'vote_id': f"vote_{election_id}_{int(time.time()*1000)}_{user[0]}",
         'election_id': election_id,
-        'ciphertext': ciphertext,
+        # Bulletin stores only the encrypted value — candidate choice is private
+        'ciphertext': json.dumps({'value': encrypted_value}),
         'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),
-        'anon_voter_hash': anon_hash
+        'anon_voter_hash': anon_hash,
     }
     entry['signature'] = sign_data(json.dumps(entry, sort_keys=True))
-
     _append_bulletin_entry(entry)
+
+    # Maintain per-candidate encrypted tally in a separate private server-side ledger
+    _record_private_vote(election_id, candidate_index, encrypted_value)
+
     mark_voted(user[0], election_id)
     return jsonify({'message': 'Vote recorded', 'vote_id': entry['vote_id']}), 201
+
+
+# ── Private vote ledger (candidate_index never exposed to public bulletin) ──
+
+PRIVATE_LEDGER_FILE = os.path.join(DATABASE_DIR, 'private_ledger.json')
+
+def _read_private_ledger():
+    if not os.path.exists(PRIVATE_LEDGER_FILE):
+        return {}
+    try:
+        with open(PRIVATE_LEDGER_FILE, 'r', encoding='utf-8') as f:
+            return json.loads(f.read().strip() or '{}')
+    except Exception:
+        return {}
+
+def _write_private_ledger(data):
+    with open(PRIVATE_LEDGER_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2)
+
+def _record_private_vote(election_id, candidate_index, encrypted_value):
+    """Append an encrypted vote for a specific candidate to the private ledger."""
+    ledger = _read_private_ledger()
+    key = str(election_id)
+    if key not in ledger:
+        ledger[key] = {}
+    cand_key = str(candidate_index)
+    if cand_key not in ledger[key]:
+        ledger[key][cand_key] = []
+    ledger[key][cand_key].append(encrypted_value)
+    _write_private_ledger(ledger)
 
 
 @app.route('/admin/tally', methods=['POST'])
@@ -547,29 +592,26 @@ def tally_election():
     candidates = _parse_candidates(e[2])
     public_key = json.loads(e[4])
 
-    bulletin = _read_bulletin_safe()
-    votes = [v for v in bulletin if v.get('election_id') == election_id]
-    if not votes:
+    ledger = _read_private_ledger()
+    election_ledger = ledger.get(str(election_id), {})
+
+    if not election_ledger:
         return jsonify({'error': 'No votes cast'}), 400
 
     paillier = PaillierCrypto()
     paillier.set_public_key(public_key)
 
     aggregated = {i: None for i in range(len(candidates))}
-    for v in votes:
-        try:
-            cdata = json.loads(v['ciphertext'])
-            idx = int(cdata['candidate_index'])
-            val_str = str(cdata['value'])
-            if not val_str.isdigit():
-                return jsonify({'error': 'Invalid ciphertext format'}), 400
+    for idx in range(len(candidates)):
+        votes_for_cand = election_ledger.get(str(idx), [])
+        for val_str in votes_for_cand:
+            if not str(val_str).isdigit():
+                return jsonify({'error': 'Invalid ciphertext in ledger'}), 400
             cipher_int = int(val_str)
             if aggregated[idx] is None:
                 aggregated[idx] = cipher_int
             else:
                 aggregated[idx] = paillier.add_ciphertexts(aggregated[idx], cipher_int)
-        except Exception as ex:
-            return jsonify({'error': f'Corrupted vote: {str(ex)}'}), 400
 
     try:
         private_key = combine_shares(trustee_shares)
@@ -591,7 +633,8 @@ def tally_election():
                 return jsonify({'error': f'Decryption failed for {name}: {str(ex)}'}), 400
 
     update_election(election_id, 'tallied', json.dumps(results))
-    return jsonify({'election_id': election_id, 'results': results, 'total_votes': len(votes)}), 200
+    total_votes = sum(len(v) for v in election_ledger.values())
+    return jsonify({'election_id': election_id, 'results': results, 'total_votes': total_votes}), 200
 
 
 @app.route('/admin/tally-auto/<int:election_id>', methods=['POST'])
@@ -620,29 +663,26 @@ def tally_election_auto(election_id):
     candidates = _parse_candidates(e[2])
     public_key = json.loads(e[4])
 
-    bulletin = _read_bulletin_safe()
-    votes = [v for v in bulletin if v.get('election_id') == election_id]
-    if not votes:
+    ledger = _read_private_ledger()
+    election_ledger = ledger.get(str(election_id), {})
+
+    if not election_ledger:
         return jsonify({'error': 'No votes cast'}), 400
 
     paillier = PaillierCrypto()
     paillier.set_public_key(public_key)
 
     aggregated = {i: None for i in range(len(candidates))}
-    for v in votes:
-        try:
-            cdata = json.loads(v['ciphertext'])
-            idx = int(cdata['candidate_index'])
-            val_str = str(cdata['value'])
-            if not val_str.isdigit():
-                return jsonify({'error': 'Invalid ciphertext format'}), 400
+    for idx in range(len(candidates)):
+        votes_for_cand = election_ledger.get(str(idx), [])
+        for val_str in votes_for_cand:
+            if not str(val_str).isdigit():
+                return jsonify({'error': 'Invalid ciphertext in ledger'}), 400
             cipher_int = int(val_str)
             if aggregated[idx] is None:
                 aggregated[idx] = cipher_int
             else:
                 aggregated[idx] = paillier.add_ciphertexts(aggregated[idx], cipher_int)
-        except Exception as ex:
-            return jsonify({'error': f'Corrupted vote: {str(ex)}'}), 400
 
     try:
         private_key = combine_shares(trustee_shares)
@@ -664,7 +704,8 @@ def tally_election_auto(election_id):
                 return jsonify({'error': f'Decryption failed for {name}: {str(ex)}'}), 400
 
     update_election(election_id, 'tallied', json.dumps(results))
-    return jsonify({'election_id': election_id, 'results': results, 'total_votes': len(votes)}), 200
+    total_votes = sum(len(v) for v in election_ledger.values())
+    return jsonify({'election_id': election_id, 'results': results, 'total_votes': total_votes}), 200
 
 
 @app.route('/results/<int:election_id>', methods=['GET'])
@@ -691,24 +732,13 @@ def get_voter_list(election_id):
 
     conn = get_conn()
     c = conn.cursor()
-
-    # Get all voters
     c.execute("SELECT id, name, phone FROM users WHERE role='voter'")
     all_voters = c.fetchall()
-
-    # Get who voted in this election
     c.execute("SELECT user_id FROM votes WHERE election_id=?", (election_id,))
     voted_ids = set(row[0] for row in c.fetchall())
     conn.close()
 
-    voters = []
-    for v in all_voters:
-        voters.append({
-            'id': v[0],
-            'name': v[1],
-            'phone': v[2],
-            'voted': v[0] in voted_ids
-        })
+    voters = [{'id': v[0], 'name': v[1], 'phone': v[2], 'voted': v[0] in voted_ids} for v in all_voters]
 
     return jsonify({
         'election_id': election_id,
@@ -727,6 +757,10 @@ def get_bulletin():
 @app.route('/admin/live-count/<int:election_id>', methods=['GET'])
 @jwt_required()
 def live_vote_count(election_id):
+    """
+    FIX #3: Returns only the total encrypted vote count — not per-candidate breakdown.
+    Per-candidate counts are only revealed after tallying with trustee shares.
+    """
     u = _get_current_user()
     if not u or u[4] != 'admin':
         return jsonify({'error': 'Admin access required'}), 403
@@ -735,27 +769,15 @@ def live_vote_count(election_id):
     if not e:
         return jsonify({'error': 'Election not found'}), 404
 
-    candidates = _parse_candidates(e[2])
     bulletin = _read_bulletin_safe()
-    votes = [v for v in bulletin if v.get('election_id') == election_id]
-
-    # Count votes per candidate index from bulletin (candidate_index is stored in plaintext)
-    counts = {name: 0 for name in candidates}
-    for v in votes:
-        try:
-            cdata = json.loads(v['ciphertext'])
-            idx = int(cdata['candidate_index'])
-            if 0 <= idx < len(candidates):
-                counts[candidates[idx]] += 1
-        except Exception:
-            pass
+    total_votes = len([v for v in bulletin if v.get('election_id') == election_id])
 
     return jsonify({
         'election_id': election_id,
         'name': e[1],
         'status': e[3],
-        'total_votes': len(votes),
-        'counts': counts
+        'total_votes': total_votes,
+        # Note: per-candidate counts are intentionally withheld until election is tallied
     }), 200
 
 
@@ -769,7 +791,6 @@ def get_pending_voters():
     if not u or u[4] != 'admin':
         return jsonify({'error': 'Admin access required'}), 403
 
-    # Auto-sync from CSV if the file has changed since last check
     csv_path = os.path.join(DATABASE_DIR, 'users.csv')
     try:
         mtime = os.path.getmtime(csv_path) if os.path.exists(csv_path) else 0
@@ -781,7 +802,7 @@ def get_pending_voters():
     except Exception as e:
         print(f"CSV auto-sync error: {e}")
 
-    conn = __import__('models').get_conn()
+    conn = get_conn()
     c = conn.cursor()
     c.execute("SELECT id,name,phone,voter_id,dob,created_at,approved FROM users WHERE role='voter' ORDER BY created_at DESC")
     rows = c.fetchall()
@@ -790,13 +811,12 @@ def get_pending_voters():
     return jsonify(voters), 200
 
 
-
 import csv as _csv_module
 import tempfile
 import shutil
 
 def _safe_csv_write(csv_path, rows):
-    """Write CSV safely using temp file to avoid OneDrive/file-lock issues."""
+    """Write CSV safely using temp file to avoid file-lock issues."""
     tmp_path = csv_path + '.tmp'
     with open(tmp_path, 'w', newline='', encoding='utf-8') as f:
         _csv_module.writer(f, lineterminator='\r\n').writerows(rows)
@@ -805,14 +825,12 @@ def _safe_csv_write(csv_path, rows):
 CSV_HEADER = ['name', 'phone', 'role', 'email', 'password', 'voter_id', 'dob']
 
 def _csv_add_voter(csv_path, name, phone, voter_id, dob):
-    """Append voter to CSV, avoiding duplicates. Always ensures header row exists."""
     def norm(p):
         return p.strip().replace(' ', '').replace('-', '').replace('+91', '').lstrip('0')
     rows = []
     if os.path.exists(csv_path):
         with open(csv_path, 'r', newline='', encoding='utf-8') as f:
             rows = list(_csv_module.reader(f))
-    # Ensure header is present
     if not rows or rows[0] != CSV_HEADER:
         rows = [CSV_HEADER] + [r for r in rows if r and r[0] != 'name']
     for r in rows[1:]:
@@ -826,13 +844,12 @@ def _csv_add_voter(csv_path, name, phone, voter_id, dob):
             from datetime import datetime
             return datetime.strptime(d.strip(), '%Y-%m-%d').strftime('%d-%m-%Y')
         except Exception:
-            return d  # already formatted or unrecognised, leave as-is
+            return d
     rows.append([name, phone, 'voter', '', '', voter_id or '', _fmt_dob(dob)])
     _safe_csv_write(csv_path, rows)
     print(f"CSV: added {name} ({phone})")
 
 def _csv_remove_voter(csv_path, phone):
-    """Remove voter row from CSV by phone."""
     def norm(p):
         return p.strip().replace(' ', '').replace('-', '').replace('+91', '').lstrip('0')
     if not os.path.exists(csv_path):
@@ -852,11 +869,10 @@ def approve_voter(user_id):
     u = _get_current_user()
     if not u or u[4] != 'admin':
         return jsonify({'error': 'Admin access required'}), 403
-    conn = __import__('models').get_conn()
+    conn = get_conn()
     c = conn.cursor()
     c.execute("UPDATE users SET approved=1 WHERE id=? AND role='voter'", (user_id,))
     conn.commit()
-    # Fetch voter details to write to CSV
     row = conn.execute(
         "SELECT name, phone, voter_id, dob, password_hash FROM users WHERE id=?", (user_id,)
     ).fetchone()
@@ -878,11 +894,10 @@ def approve_voter(user_id):
 @app.route('/admin/reject-voter/<int:user_id>', methods=['DELETE'])
 @jwt_required()
 def reject_voter(user_id):
-    import csv as csv_module
     u = _get_current_user()
     if not u or u[4] != 'admin':
         return jsonify({'error': 'Admin access required'}), 403
-    conn = __import__('models').get_conn()
+    conn = get_conn()
     c = conn.cursor()
     row = conn.execute("SELECT phone FROM users WHERE id=? AND role='voter'", (user_id,)).fetchone()
     if not row:
@@ -893,7 +908,6 @@ def reject_voter(user_id):
     conn.commit()
     conn.close()
 
-    # Remove from users.csv
     try:
         csv_path = os.path.join(DATABASE_DIR, 'users.csv')
         _csv_remove_voter(csv_path, phone)
@@ -917,12 +931,10 @@ def voter_status(election_id):
     if not e:
         return jsonify({'error': 'Election not found'}), 404
 
-    # Get all voters
     all_users = get_all_users()
-    voters = [usr for usr in all_users if usr[5] == 'voter']  # role is index 5
+    voters = [usr for usr in all_users if usr[5] == 'voter']
 
-    # Get who voted
-    conn = __import__('models').get_conn()
+    conn = get_conn()
     c = conn.cursor()
     c.execute("SELECT user_id FROM votes WHERE election_id=?", (election_id,))
     voted_ids = {row[0] for row in c.fetchall()}

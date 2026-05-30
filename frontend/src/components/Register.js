@@ -76,47 +76,69 @@ function Register() {
         .rg-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; display: flex; align-items: center; justify-content: flex-end; padding: 1rem 2rem; background: rgba(2,11,26,0.7); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(0,229,255,0.10); }
         .rg-back { font-family: 'Orbitron', monospace; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.12em; padding: 0.45rem 1.2rem; border-radius: 3px; cursor: pointer; text-transform: uppercase; transition: all 0.25s ease; background: transparent; border: 1px solid rgba(0,229,255,0.4); color: #00e5ff; text-decoration: none; }
         .rg-back:hover { background: rgba(0,229,255,0.08); box-shadow: 0 0 16px rgba(0,229,255,0.3); }
-        .rg-card { position: relative; z-index: 10; width: 100%; max-width: 500px; padding: 2.5rem 2.8rem; background: rgba(0,18,45,0.75); border: 1px solid rgba(0,229,255,0.18); backdrop-filter: blur(16px); animation: rg-fadeUp 0.8s ease both; }
+
+        /* ── BIGGER CARD ── */
+        .rg-card { position: relative; z-index: 10; width: 100%; max-width: 620px; padding: 3rem 3.5rem; background: rgba(0,18,45,0.75); border: 1px solid rgba(0,229,255,0.18); backdrop-filter: blur(16px); animation: rg-fadeUp 0.8s ease both; }
+
         .rg-c { position: absolute; width: 18px; height: 18px; border-color: #00e5ff; border-style: solid; }
         .rg-c-tl { top:-1px; left:-1px; border-width:2px 0 0 2px; }
         .rg-c-tr { top:-1px; right:-1px; border-width:2px 2px 0 0; }
         .rg-c-bl { bottom:-1px; left:-1px; border-width:0 0 2px 2px; }
         .rg-c-br { bottom:-1px; right:-1px; border-width:0 2px 2px 0; }
-        .rg-card-label { position: absolute; top: -0.65rem; left: 50%; transform: translateX(-50%); font-family: 'Orbitron', monospace; font-size: 0.48rem; letter-spacing: 0.28em; color: #00e5ff; background: #020b1a; padding: 0 0.8rem; white-space: nowrap; opacity: 0.75; }
-        .rg-title { font-family: 'Orbitron', monospace; font-size: 1.4rem; font-weight: 900; color: #fff; letter-spacing: 0.06em; text-align: center; text-shadow: 0 0 20px rgba(0,229,255,0.3); margin-bottom: 1.5rem; }
-        .rg-field { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 1rem; }
-        .rg-field label { font-family: 'Orbitron', monospace; font-size: 0.52rem; letter-spacing: 0.2em; color: rgba(0,229,255,0.6); text-transform: uppercase; }
-        .rg-input { background: rgba(0,30,70,0.6); border: 1px solid rgba(0,229,255,0.2); color: #e0f4ff; font-family: 'Rajdhani', sans-serif; font-size: 1rem; padding: 0.75rem 1rem; outline: none; transition: all 0.25s ease; border-radius: 2px; letter-spacing: 0.04em; width: 100%; }
+        .rg-card-label { position: absolute; top: -0.65rem; left: 50%; transform: translateX(-50%); font-family: 'Orbitron', monospace; font-size: 0.52rem; letter-spacing: 0.28em; color: #00e5ff; background: #020b1a; padding: 0 0.8rem; white-space: nowrap; opacity: 0.75; }
+
+        /* ── BIGGER TITLE ── */
+        .rg-title { font-family: 'Orbitron', monospace; font-size: 1.9rem; font-weight: 900; color: #fff; letter-spacing: 0.08em; text-align: center; text-shadow: 0 0 20px rgba(0,229,255,0.3); margin-bottom: 2rem; }
+
+        /* ── BIGGER FIELDS ── */
+        .rg-field { display: flex; flex-direction: column; gap: 0.45rem; margin-bottom: 1.3rem; }
+        .rg-field label { font-family: 'Orbitron', monospace; font-size: 0.62rem; letter-spacing: 0.2em; color: rgba(0,229,255,0.7); text-transform: uppercase; }
+
+        /* ── BIGGER INPUTS ── */
+        .rg-input { background: rgba(0,30,70,0.6); border: 1px solid rgba(0,229,255,0.2); color: #e0f4ff; font-family: 'Rajdhani', sans-serif; font-size: 1.15rem; padding: 0.95rem 1.2rem; outline: none; transition: all 0.25s ease; border-radius: 2px; letter-spacing: 0.04em; width: 100%; }
         .rg-input::placeholder { color: rgba(180,220,255,0.25); }
         .rg-input:focus { border-color: rgba(0,229,255,0.6); background: rgba(0,40,90,0.6); box-shadow: 0 0 16px rgba(0,229,255,0.12); }
         .rg-input[type="date"] { color-scheme: dark; }
-        .rg-input[type="date"]::-webkit-calendar-picker-indicator { filter: brightness(0) invert(1) sepia(1) saturate(10) hue-rotate(175deg) brightness(2); opacity: 1; cursor: pointer; width: 20px; height: 20px; }
+        .rg-input[type="date"]::-webkit-calendar-picker-indicator { filter: brightness(0) invert(1) sepia(1) saturate(10) hue-rotate(175deg) brightness(2); opacity: 1; cursor: pointer; width: 22px; height: 22px; }
         .rg-input[type="date"]::-webkit-datetime-edit { color: #e0f4ff; }
         .rg-input[type="date"]::-webkit-datetime-edit-fields-wrapper { color: #e0f4ff; }
-        .rg-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+
+        .rg-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
         .rg-phone-row { display: flex; align-items: stretch; }
-        .rg-prefix { padding: 0.75rem 0.9rem; background: rgba(0,229,255,0.08); border: 1px solid rgba(0,229,255,0.2); border-right: none; border-radius: 2px 0 0 2px; color: #00e5ff; font-family: 'Rajdhani', sans-serif; font-size: 1rem; user-select: none; white-space: nowrap; }
+
+        /* ── BIGGER PREFIX ── */
+        .rg-prefix { padding: 0.95rem 1.1rem; background: rgba(0,229,255,0.08); border: 1px solid rgba(0,229,255,0.2); border-right: none; border-radius: 2px 0 0 2px; color: #00e5ff; font-family: 'Rajdhani', sans-serif; font-size: 1.15rem; user-select: none; white-space: nowrap; }
+
         .rg-pass-wrap { position: relative; }
-        .rg-pass-wrap .rg-input { padding-right: 3rem; }
+        .rg-pass-wrap .rg-input { padding-right: 3.2rem; }
         .rg-pass-wrap .rg-input::-ms-reveal,
         .rg-pass-wrap .rg-input::-ms-clear,
         .rg-pass-wrap .rg-input::-webkit-credentials-auto-fill-button,
         .rg-pass-wrap .rg-input::-webkit-contacts-auto-fill-button { display: none !important; }
-        .rg-eye { position: absolute; right: 0.75rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: rgba(0,229,255,0.5); padding: 0.2rem; display: flex; align-items: center; transition: color 0.2s; }
+        .rg-eye { position: absolute; right: 0.85rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: rgba(0,229,255,0.5); padding: 0.2rem; display: flex; align-items: center; transition: color 0.2s; }
         .rg-eye:hover { color: #00e5ff; }
-        .rg-hint { font-size: 0.78rem; color: rgba(0,229,255,0.45); margin-top: 0.3rem; letter-spacing: 0.02em; font-family: 'Rajdhani', sans-serif; }
+
+        /* ── BIGGER HINT & CHECKBOX ── */
+        .rg-hint { font-size: 0.9rem; color: rgba(0,229,255,0.45); margin-top: 0.35rem; letter-spacing: 0.02em; font-family: 'Rajdhani', sans-serif; }
         .rg-hint strong { color: rgba(0,229,255,0.75); }
-        .rg-checkbox { display: flex; align-items: center; gap: 0.6rem; margin: 1rem 0; cursor: pointer; }
-        .rg-checkbox input { accent-color: #00e5ff; width: 15px; height: 15px; }
-        .rg-checkbox span { font-size: 0.85rem; color: rgba(180,220,255,0.5); }
+        .rg-checkbox { display: flex; align-items: center; gap: 0.7rem; margin: 1.2rem 0; cursor: pointer; }
+        .rg-checkbox input { accent-color: #00e5ff; width: 17px; height: 17px; }
+        .rg-checkbox span { font-size: 1rem; color: rgba(180,220,255,0.5); }
         .rg-checkbox a { color: #00e5ff; text-decoration: none; }
-        .rg-msg-success { font-size: 0.82rem; color: #00e5ff; background: rgba(0,229,255,0.07); border: 1px solid rgba(0,229,255,0.2); padding: 0.6rem 0.9rem; margin-bottom: 0.8rem; letter-spacing: 0.03em; border-radius: 2px; }
-        .rg-msg-error { font-size: 0.82rem; color: #ff6b6b; background: rgba(255,107,107,0.07); border: 1px solid rgba(255,107,107,0.25); padding: 0.6rem 0.9rem; margin-bottom: 0.8rem; letter-spacing: 0.03em; border-radius: 2px; }
-        .rg-submit { width: 100%; padding: 0.95rem; font-family: 'Orbitron', monospace; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; cursor: pointer; border: 1px solid rgba(0,229,255,0.5); color: #00e5ff; background: rgba(0,229,255,0.06); transition: all 0.3s ease; border-radius: 2px; margin-top: 0.4rem; }
+
+        .rg-msg-success { font-size: 0.95rem; color: #00e5ff; background: rgba(0,229,255,0.07); border: 1px solid rgba(0,229,255,0.2); padding: 0.7rem 1rem; margin-bottom: 0.9rem; letter-spacing: 0.03em; border-radius: 2px; }
+        .rg-msg-error { font-size: 0.95rem; color: #ff6b6b; background: rgba(255,107,107,0.07); border: 1px solid rgba(255,107,107,0.25); padding: 0.7rem 1rem; margin-bottom: 0.9rem; letter-spacing: 0.03em; border-radius: 2px; }
+
+        /* ── BIGGER SUBMIT BUTTON ── */
+        .rg-submit { width: 100%; padding: 1.1rem; font-family: 'Orbitron', monospace; font-size: 0.85rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; cursor: pointer; border: 1px solid rgba(0,229,255,0.5); color: #00e5ff; background: rgba(0,229,255,0.06); transition: all 0.3s ease; border-radius: 2px; margin-top: 0.5rem; }
         .rg-submit:hover { background: rgba(0,229,255,0.12); box-shadow: 0 0 28px rgba(0,229,255,0.35), inset 0 0 16px rgba(0,229,255,0.05); transform: translateY(-1px); }
+
         .rg-footer-bar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; text-align: center; padding: 0.8rem; font-family: 'Orbitron', monospace; font-size: 0.48rem; letter-spacing: 0.18em; color: rgba(0,229,255,0.2); border-top: 1px solid rgba(0,229,255,0.06); background: rgba(2,11,26,0.7); backdrop-filter: blur(10px); }
-        .rg-signin { text-align: center; color: rgba(180,220,255,0.4); font-size: 0.88rem; margin-top: 1.2rem; font-family: 'Rajdhani', sans-serif; }
+
+        /* ── BIGGER SIGN IN ── */
+        .rg-signin { text-align: center; color: rgba(180,220,255,0.4); font-size: 1rem; margin-top: 1.4rem; font-family: 'Rajdhani', sans-serif; }
         .rg-signin a { color: #00e5ff; font-weight: 600; text-decoration: none; }
+
         @keyframes rg-fadeUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
         .rg-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 999; display: flex; align-items: center; justify-content: center; padding: 1rem; backdrop-filter: blur(4px); }
         .rg-modal { position: relative; width: 100%; max-width: 600px; max-height: 80vh; background: rgba(0,12,32,0.98); border: 1px solid rgba(0,229,255,0.25); padding: 2rem 2rem 1.5rem; overflow-y: auto; animation: rg-fadeUp 0.3s ease both; }
@@ -144,6 +166,7 @@ function Register() {
         <form onSubmit={handleSubmit} autoComplete="off">
           <input type="text" name="username" style={{ display: 'none' }} readOnly />
           <input type="password" name="password" style={{ display: 'none' }} readOnly />
+
           {/* Full Name */}
           <div className="rg-field">
             <label>Full Name</label>
@@ -164,7 +187,7 @@ function Register() {
           </div>
 
           {/* Voter ID + DOB */}
-          <div className="rg-row2" style={{ marginBottom: '1rem' }}>
+          <div className="rg-row2" style={{ marginBottom: '1.3rem' }}>
             <div className="rg-field" style={{ marginBottom: 0 }}>
               <label>Voter ID</label>
               <input className="rg-input" type="text" placeholder=""
@@ -217,7 +240,7 @@ function Register() {
           {/* Terms */}
           <label className="rg-checkbox">
             <input type="checkbox" checked={agree} onChange={e => setAgree(e.target.checked)} />
-            <span>I agree to the <button type="button" onClick={() => setShowTerms(true)} style={{ background: 'none', border: 'none', color: '#00e5ff', cursor: 'pointer', fontFamily: "'Rajdhani', sans-serif", fontSize: '0.85rem', padding: 0, textDecoration: 'underline' }}>Terms &amp; Privacy Policy</button></span>
+            <span>I agree to the <button type="button" onClick={() => setShowTerms(true)} style={{ background: 'none', border: 'none', color: '#00e5ff', cursor: 'pointer', fontFamily: "'Rajdhani', sans-serif", fontSize: '1rem', padding: 0, textDecoration: 'underline' }}>Terms &amp; Privacy Policy</button></span>
           </label>
 
           {message && <div className="rg-msg-success">{message}</div>}

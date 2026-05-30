@@ -47,7 +47,7 @@ function ElectionList({ token, user }) {
             </p>
             {e.end_time && e.status === 'active' && (
               <p style={{ margin: '0.3rem 0 0 0', fontSize: '0.85rem', color: '#FF8' }}>
-                Voting ends: {new Date(e.end_time).toLocaleString()}
+                Voting ends: {new Date(e.end_time).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
               </p>
             )}
           </div>

@@ -1,8 +1,21 @@
 # backend/crypto.py
+import os
 import random
 from phe import paillier
 import hashlib
 import hmac
+
+# Load signing key from environment — never use the fallback in production
+_SIGNING_KEY = os.getenv("HMAC_SIGNING_KEY", "").encode()
+if not _SIGNING_KEY:
+    import warnings
+    warnings.warn(
+        "HMAC_SIGNING_KEY is not set in the environment. "
+        "Using an insecure default — set this variable before deploying.",
+        stacklevel=1,
+    )
+    _SIGNING_KEY = b"dev-signing-key-DO-NOT-USE-IN-PRODUCTION"
+
 
 class PaillierCrypto:
     def __init__(self):
@@ -55,7 +68,6 @@ class PaillierCrypto:
 
 
 # Well-known safe 2048-bit prime (RFC 3526 Group 14) — used as Shamir field prime.
-# This is larger than any 1024-bit p or q, so it works for both 1024 and 2048-bit Paillier keys.
 _SAFE_PRIME_2048 = int(
     "FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1"
     "29024E088A67CC74020BBEA63B139B22514A08798E3404DD"
@@ -70,6 +82,7 @@ _SAFE_PRIME_2048 = int(
     "15728E5A8AACAA68FFFFFFFFFFFFFFFF", 16
 )
 
+
 def generate_trustee_shares(private_key_dict, n_shares=3, threshold=2):
     """
     Shamir secret sharing for p and q using a known safe 2048-bit prime.
@@ -78,14 +91,12 @@ def generate_trustee_shares(private_key_dict, n_shares=3, threshold=2):
     p = int(private_key_dict['p'])
     q = int(private_key_dict['q'])
 
-    # Use the precomputed safe prime — no expensive prime search needed
     field_prime = _SAFE_PRIME_2048
-    
+
     def shamir_share_simple(secret, n, k, prime):
         """Generate n shares with threshold k for secret mod prime"""
         if k > n:
             raise ValueError("Threshold k cannot exceed n")
-        # Polynomial: f(x) = secret + a1*x + a2*x^2 + ... + a(k-1)*x^(k-1) mod prime
         coeffs = [secret] + [random.randrange(1, prime) for _ in range(k - 1)]
         shares = []
         for i in range(1, n + 1):
@@ -93,17 +104,17 @@ def generate_trustee_shares(private_key_dict, n_shares=3, threshold=2):
             y = sum((c * pow(x, idx, prime)) % prime for idx, c in enumerate(coeffs)) % prime
             shares.append({'index': x, 'value': y})
         return shares, prime
-    
+
     p_shares, p_prime = shamir_share_simple(p, n_shares, threshold, field_prime)
     q_shares, q_prime = shamir_share_simple(q, n_shares, threshold, field_prime)
-    
+
     combined = []
     for i in range(n_shares):
         combined.append({
             'p_share': str(p_shares[i]['value']),
             'q_share': str(q_shares[i]['value']),
             'index': p_shares[i]['index'],
-            'prime': str(field_prime)  # store prime for reconstruction
+            'prime': str(field_prime)
         })
     return combined
 
@@ -111,18 +122,15 @@ def generate_trustee_shares(private_key_dict, n_shares=3, threshold=2):
 def combine_shares(shares):
     """
     Reconstruct private key from threshold shares using Lagrange interpolation.
-    Shares must include the field prime used during generation.
     """
     if len(shares) < 2:
         raise ValueError("Need at least 2 shares")
-    
-    # Extract field prime from first share
+
     prime = int(shares[0].get('prime', 0))
     if prime == 0:
         raise ValueError("Shares missing field prime; regenerate election with updated crypto")
-    
+
     def lagrange_at_zero(share_list, prime):
-        """Lagrange interpolation to recover f(0) = secret"""
         secret = 0
         for i, si in enumerate(share_list):
             xi = si['index']
@@ -134,27 +142,18 @@ def combine_shares(shares):
                     xj = sj['index']
                     numerator = (numerator * (-xj)) % prime
                     denominator = (denominator * (xi - xj)) % prime
-            # Modular inverse
             denom_inv = pow(denominator, -1, prime)
             coeff = (numerator * denom_inv) % prime
             secret = (secret + yi * coeff) % prime
         return secret
-    
+
     p_data = [{'index': int(s['index']), 'value': int(s['p_share'])} for s in shares]
     q_data = [{'index': int(s['index']), 'value': int(s['q_share'])} for s in shares]
-    
+
     p = lagrange_at_zero(p_data, prime)
     q = lagrange_at_zero(q_data, prime)
-    
+
     return {'p': p, 'q': q}
-
-
-def next_prime_after(n):
-    """Find next prime >= n (simple trial division for demo)"""
-    candidate = n if n % 2 == 1 else n + 1
-    while not is_prime_simple(candidate):
-        candidate += 2
-    return candidate
 
 
 def is_prime_simple(n, trials=20):
@@ -165,12 +164,12 @@ def is_prime_simple(n, trials=20):
         return True
     if n % 2 == 0:
         return False
-    
+
     r, d = 0, n - 1
     while d % 2 == 0:
         r += 1
         d //= 2
-    
+
     for _ in range(trials):
         a = random.randrange(2, n - 1)
         x = pow(a, d, n)
@@ -186,9 +185,8 @@ def is_prime_simple(n, trials=20):
 
 
 def sign_data(data_str):
-    """HMAC-SHA256 signature"""
-    secret = b'server-signing-key-change-in-production'
-    return hmac.new(secret, data_str.encode('utf-8'), hashlib.sha256).hexdigest()
+    """HMAC-SHA256 signature using env-configured key"""
+    return hmac.new(_SIGNING_KEY, data_str.encode('utf-8'), hashlib.sha256).hexdigest()
 
 
 def verify_signature(data_str, signature):
