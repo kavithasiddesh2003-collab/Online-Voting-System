@@ -39,7 +39,9 @@ function Register() {
     const age = today.getFullYear() - birth.getFullYear() -
       (today < new Date(today.getFullYear(), birth.getMonth(), birth.getDate()) ? 1 : 0);
     if (age < 18)                      { setError('You must be at least 18 years old to register.'); return; }
+    if (!passwordReady)                 { setError('Please enter your full name and date of birth first to set your password.'); return; }
     if (!password)                     { setError('Please enter your password.'); return; }
+    if (password !== autoPassword)     { setError(`Password must be the first 4 letters of your name + day of birth (e.g. "${autoPassword}").`); return; }
     if (password !== confirm)          { setError('Passwords do not match.'); return; }
     try {
       const response = await api.post('/register', {
@@ -191,9 +193,18 @@ function Register() {
                 }
               </button>
             </div>
-            {passwordReady && (
-              <div className="rg-hint">
-                🔑 Your password is <strong>first 4 letters of your name</strong> + <strong>day of birth</strong>
+            <div className="rg-hint">
+              🔑 Password format: <strong>first 4 letters of your name</strong> + <strong>day of birth</strong>
+              {passwordReady && <span style={{ color: 'rgba(0,229,255,0.9)' }}> &nbsp;→ <strong>{autoPassword}</strong></span>}
+            </div>
+            {password && passwordReady && password !== autoPassword && (
+              <div className="rg-hint" style={{ color: 'rgba(255,107,107,0.8)', marginTop: '0.2rem' }}>
+                ✗ Password does not match the required format
+              </div>
+            )}
+            {password && passwordReady && password === autoPassword && (
+              <div className="rg-hint" style={{ color: 'rgba(0,229,255,0.8)', marginTop: '0.2rem' }}>
+                ✓ Password is correct
               </div>
             )}
           </div>

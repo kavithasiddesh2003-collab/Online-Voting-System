@@ -38,16 +38,19 @@ function CreateElectionForm({ onCreated, onError }) {
   const [candidates, setCandidates] = useState([{ name: '', photo: '' }, { name: '', photo: '' }]);
   const [saving, setSaving]     = useState(false);
 
+  const MAX_CANDIDATES = 20;
+
   const changeCandidate = (i, field, val) => setCandidates(c => c.map((x, j) => j === i ? { ...x, [field]: val } : x));
-  const addCandidate    = () => setCandidates(c => [...c, { name: '', photo: '' }]);
+  const addCandidate    = () => setCandidates(c => c.length < MAX_CANDIDATES ? [...c, { name: '', photo: '' }] : c);
   const removeCandidate = (i) => setCandidates(c => c.filter((_, j) => j !== i));
 
   const submit = async () => {
     const cList = candidates.filter(c => c.name.trim());
-    if (!name.trim())     { onError('Enter an election name.'); return; }
-    if (cList.length < 2) { onError('Add at least 2 candidates.'); return; }
-    if (!startTime)       { onError('Please set a start date & time.'); return; }
-    if (!endTime)         { onError('Please set an end date & time.'); return; }
+    if (!name.trim())      { onError('Enter an election name.'); return; }
+    if (cList.length < 2)  { onError('Add at least 2 candidates.'); return; }
+    if (cList.length > MAX_CANDIDATES) { onError(`Maximum ${MAX_CANDIDATES} candidates allowed.`); return; }
+    if (!startTime)        { onError('Please set a start date & time.'); return; }
+    if (!endTime)          { onError('Please set an end date & time.'); return; }
     if (new Date(endTime) <= new Date(startTime)) { onError('End time must be after start time.'); return; }
     setSaving(true);
     try {
@@ -80,9 +83,10 @@ function CreateElectionForm({ onCreated, onError }) {
         </div>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <span style={{ color: '#e6eef8', fontWeight: 700 }}>Candidates</span>
-        <button onClick={addCandidate} style={{ background: 'none', border: '1px solid #6366f1', color: '#6366f1', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>+ Add Candidate</button>
+        <span style={{ color: '#e6eef8', fontWeight: 700 }}>Candidates <span style={{ color: '#8899aa', fontWeight: 400, fontSize: 12 }}>({candidates.length}/{MAX_CANDIDATES})</span></span>
+        <button onClick={addCandidate} disabled={candidates.length >= MAX_CANDIDATES} style={{ background: 'none', border: `1px solid ${candidates.length >= MAX_CANDIDATES ? '#3a4a6c' : '#6366f1'}`, color: candidates.length >= MAX_CANDIDATES ? '#3a4a6c' : '#6366f1', borderRadius: 6, padding: '4px 12px', cursor: candidates.length >= MAX_CANDIDATES ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 13 }}>+ Add Candidate</button>
       </div>
+      {candidates.length >= MAX_CANDIDATES && <div style={{ color: '#f59e0b', fontSize: 12, marginBottom: 10 }}>Maximum of {MAX_CANDIDATES} candidates reached.</div>}
       {candidates.map((c, i) => <CandidateRow key={i} idx={i} name={c.name} photo={c.photo} onChange={changeCandidate} onRemove={candidates.length > 2 ? removeCandidate : null} />)}
       <button onClick={submit} disabled={saving} style={{ marginTop: 8, padding: '10px 28px', background: '#5b7cf6', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer', fontSize: 15 }}>
         {saving ? 'Creating…' : 'Create Election'}
@@ -110,12 +114,14 @@ function EditModal({ election, onSave, onClose }) {
   const [saving, setSaving]       = useState(false);
   const [err, setErr]             = useState('');
 
+  const MAX_CANDIDATES = 20;
   const changeCandidate = (i, field, val) => setCandidates(c => c.map((x, j) => j === i ? { ...x, [field]: val } : x));
-  const addCandidate    = () => setCandidates(c => [...c, { name: '', photo: '' }]);
+  const addCandidate    = () => setCandidates(c => c.length < MAX_CANDIDATES ? [...c, { name: '', photo: '' }] : c);
 
   const submit = async () => {
     const cList = candidates.filter(c => c.name.trim());
-    if (cList.length < 2) { setErr('At least 2 candidates required.'); return; }
+    if (cList.length < 2)  { setErr('At least 2 candidates required.'); return; }
+    if (cList.length > MAX_CANDIDATES) { setErr(`Maximum ${MAX_CANDIDATES} candidates allowed.`); return; }
     if (!startTime) { setErr('Please set a start date & time.'); return; }
     if (!endTime)   { setErr('Please set an end date & time.'); return; }
     if (new Date(endTime) <= new Date(startTime)) { setErr('End time must be after start time.'); return; }
@@ -151,9 +157,10 @@ function EditModal({ election, onSave, onClose }) {
           </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ color: '#e6eef8', fontWeight: 700 }}>Candidates</span>
-          <button onClick={addCandidate} style={{ background: 'none', border: '1px solid #6366f1', color: '#6366f1', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', fontWeight: 700, fontSize: 13 }}>+ Add</button>
+          <span style={{ color: '#e6eef8', fontWeight: 700 }}>Candidates <span style={{ color: '#8899aa', fontWeight: 400, fontSize: 12 }}>({candidates.length}/{MAX_CANDIDATES})</span></span>
+          <button onClick={addCandidate} disabled={candidates.length >= MAX_CANDIDATES} style={{ background: 'none', border: `1px solid ${candidates.length >= MAX_CANDIDATES ? '#3a4a6c' : '#6366f1'}`, color: candidates.length >= MAX_CANDIDATES ? '#3a4a6c' : '#6366f1', borderRadius: 6, padding: '4px 12px', cursor: candidates.length >= MAX_CANDIDATES ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 13 }}>+ Add</button>
         </div>
+        {candidates.length >= MAX_CANDIDATES && <div style={{ color: '#f59e0b', fontSize: 13, marginBottom: 10 }}>Maximum of {MAX_CANDIDATES} candidates reached.</div>}
         {candidates.map((c, i) => <CandidateRow key={i} idx={i} name={c.name} photo={c.photo} onChange={changeCandidate} onRemove={candidates.length > 2 ? (i) => setCandidates(c => c.filter((_, j) => j !== i)) : null} />)}
         {err && <div style={{ color: '#ff6b6b', fontSize: 13, margin: '8px 0' }}>{err}</div>}
         <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>

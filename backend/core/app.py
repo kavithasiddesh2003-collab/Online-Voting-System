@@ -299,8 +299,8 @@ def create_new_election():
     start_time_raw = data.get('start_time', None)
     duration_minutes = data.get('duration_minutes', 0)
 
-    if not name or not isinstance(candidates, list) or len(candidates) < 2:
-        return jsonify({'error': 'Invalid election data'}), 400
+    if not name or not isinstance(candidates, list) or len(candidates) < 2 or len(candidates) > 20:
+        return jsonify({'error': 'Election must have between 2 and 20 candidates.'}), 400
 
     candidates_with_photos = [
         {'name': c, 'photo': candidate_photos[i] if i < len(candidate_photos) else ''}
@@ -413,8 +413,8 @@ def edit_election_route(election_id):
     start_time_raw   = data.get('start_time', None)
     end_time_raw     = data.get('end_time', None)
 
-    if not name or not isinstance(candidates, list) or len(candidates) < 2:
-        return jsonify({'error': 'Invalid election data'}), 400
+    if not name or not isinstance(candidates, list) or len(candidates) < 2 or len(candidates) > 20:
+        return jsonify({'error': 'Election must have between 2 and 20 candidates.'}), 400
 
     candidates_with_photos = [
         {'name': c, 'photo': candidate_photos[i] if i < len(candidate_photos) else ''}
