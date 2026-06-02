@@ -359,7 +359,9 @@ function ElectionRow({ e, onDeleted, onEdited, onError }) {
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <Btn color={showLive ? '#374151' : '#1d4ed8'} onClick={() => setShowLive(v => !v)}>{showLive ? '▲ Hide' : '▼ Live Count'}</Btn>
             <Btn color={showVoters ? '#374151' : '#1d4ed8'} onClick={() => setShowVoters(v => !v)}>{showVoters ? '▲ Hide Voters' : '▼ Show Voters'}</Btn>
-            <Btn color={showResults ? '#374151' : '#0e7490'} onClick={() => setShowResults(v => !v)}>🏆 {showResults ? '▲ Hide Results' : '▼ Results'}</Btn>
+            {e.status === 'tallied' && (
+              <Btn color={showResults ? '#374151' : '#0e7490'} onClick={() => setShowResults(v => !v)}>🏆 {showResults ? '▲ Hide Results' : '▼ Results'}</Btn>
+            )}
             <Btn color='#b45309' onClick={() => setEditOpen(true)}>✏️ Edit</Btn>
             {e.status === 'active' && ended && <Btn color='#15803d' onClick={tally} disabled={tallying}>{tallying ? '…' : 'Tally'}</Btn>}
             <Btn color='#dc2626' onClick={del}>Delete</Btn>
@@ -391,12 +393,10 @@ function ElectionRow({ e, onDeleted, onEdited, onError }) {
           </div>
         )}
 
-        {/* results: toggled by Results button — works for any status */}
-        {showResults && (
+        {/* results: only shown after tallying */}
+        {showResults && e.status === 'tallied' && (
           <div style={{ background: '#0f172a', borderRadius: 8, padding: '14px 16px', marginBottom: 8 }}>
-            {e.status === 'tallied'
-              ? <ResultsPanel id={e.id} initialResults={tallyResults || e.results} />
-              : <LiveCount id={e.id} />}
+            <ResultsPanel id={e.id} initialResults={tallyResults || e.results} />
           </div>
         )}
 

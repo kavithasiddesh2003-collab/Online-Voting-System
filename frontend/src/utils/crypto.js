@@ -73,18 +73,21 @@ class PaillierJS {
     return result;
   }
 
-  // Generate random r: 1 <= r < n (demo-grade randomness)
+  // Generate random r: 1 <= r < n using cryptographically secure randomness
   randomR() {
     if (!this.n) throw new Error('Public key not set');
 
-    const approxBytes = Math.max(16, Math.ceil(this.n.toString().length / 3));
+    // Use the same byte length as n to ensure r is uniformly distributed in [1, n)
+    const nBytes = Math.ceil(this.n.toString(16).length / 2);
+    const byteCount = nBytes + 8; // extra bytes to reduce modular bias
+    const randomBytes = new Uint8Array(byteCount);
+    crypto.getRandomValues(randomBytes);
+
     let r = 0n;
-    for (let i = 0; i < approxBytes; i++) {
-      const byte = Math.floor(Math.random() * 256) & 0xff;
-      r = (r << 8n) + (globalThis.BigInt ? globalThis.BigInt(byte) : BigInt(byte));
+    for (let i = 0; i < byteCount; i++) {
+      r = (r << 8n) + BigInt(randomBytes[i]);
     }
-    r = r % this.n;
-    if (r === 0n) r = 1n;
+    r = r % (this.n - 1n) + 1n; // ensures r is in [1, n-1]
     return r;
   }
 
