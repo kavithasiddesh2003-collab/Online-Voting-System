@@ -33,9 +33,10 @@ function Login({ onLogin }) {
     setMsg(''); setError('');
     const ph = phone.trim();
     if (!ph || ph.length !== 10) { setError('Enter a valid 10-digit phone number first.'); return; }
+    if (!password.trim()) { setError('Enter your password before requesting an OTP.'); return; }
     setSending(true);
     try {
-      await api.post('/request-otp', { phone: `+91${ph}` });
+      await api.post('/request-otp', { phone: `+91${ph}`, password: password.trim() });
       setOtpSent(true);
       setMsg('OTP sent! Check your phone or backend terminal.');
     } catch (err) {
@@ -146,7 +147,7 @@ function Login({ onLogin }) {
                 <input type="text" inputMode="numeric" maxLength={8} value={otp} onChange={(e) => setOtp(e.target.value)} required />
                 {otpSent && <div className="lg-sent-badge">✓ OTP sent — check backend terminal</div>}
               </div>
-              <button type="button" className="lg-send-btn" onClick={requestOtp} disabled={sending}>
+              <button type="button" className="lg-send-btn" onClick={requestOtp} disabled={sending || phone.trim().length !== 10 || !password.trim()}>
                 {sending ? 'Sending…' : otpSent ? 'Resend' : 'Send OTP'}
               </button>
             </div>

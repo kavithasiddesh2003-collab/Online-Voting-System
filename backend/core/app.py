@@ -170,16 +170,26 @@ def register():
 
 @app.route('/request-otp', methods=['POST'])
 def request_otp_route():
+    from werkzeug.security import check_password_hash
     data = request.json or {}
     raw_phone = data.get('phone', '').strip()
+    password  = data.get('password', '').strip()
     if not raw_phone:
         return jsonify({'error': 'Phone number required'}), 400
+    if not password:
+        return jsonify({'error': 'Password required'}), 400
     phone = _normalize_phone(raw_phone)
     user = get_user(phone)
     if not user:
         return jsonify({'error': 'Phone number not registered. Please register first.'}), 404
     if not user[5]:  # approved column
         return jsonify({'error': 'Your account is pending admin approval. You cannot log in yet.'}), 403
+    # Verify password before sending OTP
+    conn = get_conn()
+    row = conn.execute("SELECT password_hash FROM users WHERE phone=?", (phone,)).fetchone()
+    conn.close()
+    if not row or not row[0] or not check_password_hash(row[0], password):
+        return jsonify({'error': 'Incorrect password.'}), 401
     code = generate_otp(phone)
     store_otp(phone, code)
     send_otp(phone, code)
