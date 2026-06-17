@@ -252,7 +252,7 @@ def authenticate():
         return jsonify({'error': 'No OTP found. Please request an OTP first.'}), 400
     if rec['attempts'] >= 3:
         return jsonify({'error': 'Too many OTP attempts. Request a new one.'}), 429
-    if time.time() - rec['timestamp'] > 300:
+    if time.time() - rec['timestamp'] > 180:
         delete_otp(phone)
         return jsonify({'error': 'OTP expired. Please request a new one.'}), 401
     if not verify_otp(phone, otp_input, rec['otp']):

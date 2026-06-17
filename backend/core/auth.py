@@ -71,8 +71,8 @@ def delete_otp(phone):
 # ── OTP generation & verification ─────────────────────────────────────────────
 
 def generate_otp(phone):
-    """Generate 6-digit OTP using HMAC-SHA256 (time-windowed, 5-min window)."""
-    timestamp = str(int(time.time() / 300))
+    """Generate 6-digit OTP using HMAC-SHA256 (time-windowed, 3-min window)."""
+    timestamp = str(int(time.time() / 180))
     message = f"{phone}:{timestamp}"
     hmac_hash = hmac.new(
         SECRET_SALT.encode(), message.encode(), hashlib.sha256
@@ -103,7 +103,7 @@ def send_otp(phone, otp):
         "authkey": authkey,
         "otp": otp,
         "otp_length": 6,
-        "otp_expiry": 5,
+        "otp_expiry": 3,
     }
 
     try:

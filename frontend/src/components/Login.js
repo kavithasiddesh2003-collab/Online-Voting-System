@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api';
 
@@ -10,10 +10,19 @@ function Login({ onLogin }) {
   const [showPass, setShowPass] = useState(false);
   const [otp, setOtp]           = useState('');
   const [otpSent, setOtpSent]   = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(0);
   const [sending, setSending]   = useState(false);
   const [msg, setMsg]           = useState('');
   const [error, setError]       = useState('');
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (secondsLeft <= 0) return;
+    const t = setInterval(() => setSecondsLeft(s => (s > 0 ? s - 1 : 0)), 1000);
+    return () => clearInterval(t);
+  }, [secondsLeft]);
+
+  const fmtTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
   const handleVoterLogin = async (e) => {
     e.preventDefault();
@@ -38,6 +47,7 @@ function Login({ onLogin }) {
     try {
       await api.post('/request-otp', { phone: `+91${ph}`, password: password.trim() });
       setOtpSent(true);
+      setSecondsLeft(180);
       setMsg('OTP sent! Check your phone or backend terminal.');
     } catch (err) {
       setError(err.response?.data?.error || 'Could not send OTP.');
@@ -145,7 +155,8 @@ function Login({ onLogin }) {
               <div className="lg-field">
                 <label>One-Time Code</label>
                 <input type="text" inputMode="numeric" maxLength={8} value={otp} onChange={(e) => setOtp(e.target.value)} required />
-                {otpSent && <div className="lg-sent-badge">✓ OTP sent — check backend terminal</div>}
+                {otpSent && secondsLeft > 0 && <div className="lg-sent-badge">✓ OTP sent — expires in {fmtTime(secondsLeft)}</div>}
+                {otpSent && secondsLeft === 0 && <div className="lg-sent-badge" style={{ color: '#ff6b6b' }}>OTP expired — resend</div>}
               </div>
               <button type="button" className="lg-send-btn" onClick={requestOtp} disabled={sending || phone.trim().length !== 10 || !password.trim()}>
                 {sending ? 'Sending…' : otpSent ? 'Resend' : 'Send OTP'}
