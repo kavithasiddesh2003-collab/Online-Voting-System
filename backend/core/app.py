@@ -1,6 +1,7 @@
 # backend/app.py
 import json
 import os
+import re
 import time
 from datetime import datetime, timedelta
 
@@ -122,6 +123,16 @@ def _get_current_user():
     return get_user(identity)
 
 
+@app.route('/check-phone', methods=['GET'])
+def check_phone():
+    raw = request.args.get('phone', '').strip()
+    if not raw:
+        return jsonify({'error': 'Phone required'}), 400
+    full = _normalize_phone(raw)
+    existing = get_user(full)
+    return jsonify({'exists': bool(existing)}), 200
+
+
 @app.route('/register', methods=['POST'])
 def register():
     from werkzeug.security import generate_password_hash
@@ -129,6 +140,10 @@ def register():
     raw_phone = data.get('phone', '').strip()
     name      = data.get('name', '').strip()
     voter_id  = data.get('voter_id', '').strip() or None
+    if not voter_id:
+        return jsonify({'error': 'Voter ID is required.'}), 400
+    if not re.match(r'^VOT\d{3}$', voter_id):
+        return jsonify({'error': 'Voter ID must be VOT followed by exactly 3 digits (e.g. VOT001).'}), 400
     dob       = data.get('dob', '').strip() or None
     password  = data.get('password', '').strip() or None
 
@@ -791,7 +806,8 @@ def live_vote_count(election_id):
     }), 200
 
 
-_csv_last_mtime = 0
+_csv_users_path = os.path.join(DATABASE_DIR, 'users.csv')
+_csv_last_mtime = os.path.getmtime(_csv_users_path) if os.path.exists(_csv_users_path) else 0
 
 @app.route('/admin/pending-voters', methods=['GET'])
 @jwt_required()
@@ -893,6 +909,8 @@ def approve_voter(user_id):
             name, phone, voter_id, dob, _ = row
             csv_path = os.path.join(DATABASE_DIR, 'users.csv')
             _csv_add_voter(csv_path, name, phone, voter_id, dob)
+            global _csv_last_mtime
+            _csv_last_mtime = os.path.getmtime(csv_path)
         except Exception as e:
             import traceback
             print(f"CSV ERROR during approve: {e}")
@@ -921,6 +939,8 @@ def reject_voter(user_id):
     try:
         csv_path = os.path.join(DATABASE_DIR, 'users.csv')
         _csv_remove_voter(csv_path, phone)
+        global _csv_last_mtime
+        _csv_last_mtime = os.path.getmtime(csv_path)
     except Exception as e:
         import traceback
         print(f"CSV ERROR during reject: {e}")

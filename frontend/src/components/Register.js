@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api';
 
@@ -22,10 +22,21 @@ function Register() {
   const [showTerms, setShowTerms] = useState(false);
   const [message, setMessage]     = useState('');
   const [error, setError]         = useState('');
+  const [phoneTaken, setPhoneTaken] = useState(false);
   const navigate = useNavigate();
 
   const autoPassword  = generatePassword(fullName, dob);
   const passwordReady = autoPassword.length >= 2;
+
+  useEffect(() => {
+    if (phone.length !== 10) { setPhoneTaken(false); return; }
+    const t = setTimeout(() => {
+      api.get('/check-phone', { params: { phone: `+91${phone}` } })
+        .then(r => setPhoneTaken(!!r.data.exists))
+        .catch(() => {});
+    }, 400);
+    return () => clearTimeout(t);
+  }, [phone]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -33,6 +44,8 @@ function Register() {
     if (!agree)                        { setError('Please accept the terms to continue.'); return; }
     if (!fullName.trim())              { setError('Enter your full name.'); return; }
     if (!phone || phone.length !== 10) { setError('Enter a valid 10-digit phone number.'); return; }
+    if (phoneTaken)                    { setError('This phone number is already registered.'); return; }
+    if (voterId.length !== 6) { setError('Voter ID is required: VOT followed by exactly 3 digits.'); return; }
     if (!dob)                          { setError('Date of birth is required.'); return; }
     const today = new Date();
     const birth = new Date(dob);
@@ -41,13 +54,14 @@ function Register() {
     if (age < 18)                      { setError('You must be at least 18 years old to register.'); return; }
     if (!passwordReady)                 { setError('Please enter your full name and date of birth first to set your password.'); return; }
     if (!password)                     { setError('Please enter your password.'); return; }
+    if (/[A-Z]/.test(password))        { setError('Password must be lowercase only.'); return; }
     if (password !== autoPassword)     { setError('Password must follow the format: first 4 letters of your name + day of birth.'); return; }
     if (password !== confirm)          { setError('Passwords do not match.'); return; }
     try {
       const response = await api.post('/register', {
         name:     fullName.trim(),
         phone:    `+91${phone}`,
-        voter_id: voterId.trim() || undefined,
+        voter_id: voterId,
         dob,
         password,
       });
@@ -161,16 +175,37 @@ function Register() {
               <input className="rg-input" type="tel" inputMode="numeric"
                 style={{ borderRadius: '0 2px 2px 0', borderLeft: 'none', flex: 1 }}
                 maxLength={10} placeholder=""
+                onKeyDown={e => { if (/^[0-9]$/.test(e.key) && phone.length >= 10) e.preventDefault(); }}
                 value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))} required />
             </div>
+            {phoneTaken && (
+              <div className="rg-hint" style={{ color: 'rgba(255,107,107,0.8)' }}>
+                ⚠ This phone number is already registered
+              </div>
+            )}
           </div>
 
           {/* Voter ID + DOB */}
           <div className="rg-row2" style={{ marginBottom: '1rem' }}>
             <div className="rg-field" style={{ marginBottom: 0 }}>
-              <label>Voter ID</label>
-              <input className="rg-input" type="text" placeholder=""
-                autoComplete="off" value={voterId} onChange={e => setVoterId(e.target.value)} />
+              <label>Voter ID <span style={{ color: '#ff6b6b' }}>*</span></label>
+              <div className="rg-phone-row">
+                <span className="rg-prefix">VOT</span>
+                <input className="rg-input" type="text" inputMode="numeric"
+                  style={{ borderRadius: '0 2px 2px 0', borderLeft: 'none', flex: 1 }}
+                  maxLength={3} placeholder="001"
+                  autoComplete="off"
+                  value={voterId.replace(/^VOT/, '')}
+                  onChange={e => {
+                    const digits = e.target.value.replace(/\D/g, '').slice(0, 3);
+                    setVoterId(digits ? 'VOT' + digits : '');
+                  }} />
+              </div>
+              {voterId && voterId.length !== 6 && (
+                <div className="rg-hint" style={{ color: 'rgba(255,107,107,0.8)' }}>
+                  ⚠ Enter exactly 3 digits after VOT
+                </div>
+              )}
             </div>
             <div className="rg-field" style={{ marginBottom: 0 }}>
               <label>Date of Birth <span style={{ color: '#ff6b6b' }}>*</span></label>
@@ -196,12 +231,17 @@ function Register() {
             <div className="rg-hint">
               🔑 Password format: <strong>first 4 letters of your name</strong> + <strong>day of birth</strong>
             </div>
-            {password && passwordReady && password !== autoPassword && (
+            {password && /[A-Z]/.test(password) && (
+              <div className="rg-hint" style={{ color: 'rgba(255,107,107,0.8)', marginTop: '0.2rem' }}>
+                ⚠ Password must be lowercase only
+              </div>
+            )}
+            {password && !/[A-Z]/.test(password) && passwordReady && password !== autoPassword && (
               <div className="rg-hint" style={{ color: 'rgba(255,107,107,0.8)', marginTop: '0.2rem' }}>
                 ✗ Password does not match the required format
               </div>
             )}
-            {password && passwordReady && password === autoPassword && (
+            {password && !/[A-Z]/.test(password) && passwordReady && password === autoPassword && (
               <div className="rg-hint" style={{ color: 'rgba(0,229,255,0.8)', marginTop: '0.2rem' }}>
                 ✓ Password is correct
               </div>

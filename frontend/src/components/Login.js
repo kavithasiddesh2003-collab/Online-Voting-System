@@ -27,6 +27,7 @@ function Login({ onLogin }) {
   const handleVoterLogin = async (e) => {
     e.preventDefault();
     setMsg(''); setError('');
+    if (/[A-Z]/.test(password)) { setError('Password must be lowercase only.'); return; }
     try {
       const res = await api.post('/auth', { phone: `+91${phone.trim()}`, password, otp: otp.trim() });
       const { token, user } = res.data;
@@ -134,6 +135,7 @@ function Login({ onLogin }) {
               <div style={{ display: 'flex', alignItems: 'stretch' }}>
                 <span style={{ padding: '0.75rem 0.9rem', background: 'rgba(0,229,255,0.08)', border: '1px solid rgba(0,229,255,0.2)', borderRight: 'none', borderRadius: '2px 0 0 2px', color: '#00e5ff', fontSize: '1rem', userSelect: 'none' }}>+91</span>
                 <input type="tel" inputMode="numeric" maxLength={10} value={phone}
+                  onKeyDown={(e) => { if (/^[0-9]$/.test(e.key) && phone.length >= 10) e.preventDefault(); }}
                   onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                   style={{ borderRadius: '0 2px 2px 0', flex: 1 }} required />
               </div>
@@ -150,6 +152,9 @@ function Login({ onLogin }) {
                     : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
                 </button>
               </div>
+              {password && /[A-Z]/.test(password) && (
+                <div className="lg-sent-badge" style={{ color: '#ff6b6b' }}>⚠ Password must be lowercase only</div>
+              )}
             </div>
             <div className="lg-otp-row">
               <div className="lg-field">
