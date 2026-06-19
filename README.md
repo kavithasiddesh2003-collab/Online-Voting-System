@@ -122,7 +122,6 @@ python backend/run.py        # Flask on http://localhost:5000
 cd frontend && npm start     # React on http://localhost:3000
 ```
 
-The app opens at **http://localhost:3000**
 
 ---
 
