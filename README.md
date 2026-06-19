@@ -1,150 +1,201 @@
-# SecureVote – Privacy Preserving Online Voting System
+# SecureVote — Privacy-Preserving Online Voting System
 
-SecureVote is a secure web-based electronic voting system that ensures voter privacy, election transparency, and verifiable results using modern cryptographic techniques.
-
-The system uses **Paillier Homomorphic Encryption** to keep votes encrypted while still allowing accurate vote counting. It also implements **threshold decryption**, where the private key is split among trustees so that no single authority can decrypt votes.
-
-The platform includes OTP authentication, encrypted vote casting, duplicate vote prevention, and a public bulletin board for auditability, making it suitable for college elections, company voting, and community decision making.
+A full-stack web-based electronic voting system built with React and Flask, using **Paillier Homomorphic Encryption** and **Shamir Secret Sharing** to ensure votes remain private even during counting.
 
 ---
 
-# Features
+## Features
 
-- End-to-End encrypted voting
-- Paillier Homomorphic Encryption for secure vote aggregation
-- Threshold secret sharing for distributed trust
-- OTP-based voter authentication
-- Duplicate vote prevention
-- Public bulletin board for transparency
-- Admin dashboard for election management
-- Secure automated vote tallying
-- Simple and user-friendly interface
-
----
-
-# Tech Stack
-
-### Frontend
-- React.js
-- Axios
-- Crypto-JS
-
-### Backend
-- Python
-- Flask
-- Flask-JWT-Extended
-
-### Database
-- SQLite
-
-### Cryptography
-- Paillier Homomorphic Encryption
-- Shamir Secret Sharing
+- Voter self-registration with admin approval workflow
+- Three-factor authentication: phone number + password + SMS OTP (Twilio)
+- Client-side vote encryption using Paillier homomorphic encryption
+- Threshold decryption via Shamir Secret Sharing (no single point of trust)
+- Public bulletin board for auditability
+- Duplicate vote prevention (one vote per user per election)
+- Admin dashboard: create, edit, delete, and tally elections
+- Election scheduling with configurable start and end times (UTC/IST)
+- Up to 20 candidates per election with photo support
+- Live results with bar chart, winner detection, and tie handling
+- Supports SQLite (default) and MySQL
 
 ---
 
-# System Workflow
+## Tech Stack
 
-1. Admin creates an election with candidates.
-2. Voters authenticate using OTP.
-3. Voters select a candidate and submit their vote.
-4. Votes are encrypted on the client side before reaching the server.
-5. Encrypted ballots are stored on a public bulletin board.
-6. After voting ends, the admin tallies results using threshold decryption.
-7. Final results are displayed without revealing individual votes.
-
----
-
-# Screenshots
-
-## Admin Panel
-![Admin Panel](assets/screenshots/admin_panel.png)
-
-## Voting Interface
-![Voting Page](assets/screenshots/voting_page.png)
-
-## Election Results
-![Results](assets/screenshots/results_page.png)
-
-## Tie Result Example
-![Tie Result](assets/screenshots/tie_result.png)
+| Layer | Technologies |
+|---|---|
+| Frontend | React.js, React Router DOM, Axios, Crypto-JS |
+| Backend | Python, Flask, Flask-JWT-Extended, Flask-CORS |
+| Database | SQLite (default) / MySQL |
+| Cryptography | Paillier (`phe`), Shamir Secret Sharing |
+| OTP | Twilio SMS |
 
 ---
 
-# How to Run the Project
+## Project Structure
 
-## 1. Clone the repository
-
-```bash
-git clone https://github.com/yourusername/securevote.git
-cd securevote
+```
+Online-Voting-System/
+├── backend/
+│   ├── core/
+│   │   ├── app.py          # Flask routes
+│   │   ├── auth.py         # OTP generation and verification
+│   │   ├── crypto.py       # Paillier encryption / Shamir sharing
+│   │   ├── models.py       # DB models (SQLite + MySQL)
+│   │   └── verify.py       # Post-election verification tool
+│   ├── run.py
+│   └── requirements.txt
+├── frontend/
+│   └── src/
+│       └── components/
+│           ├── LandingPage.js
+│           ├── Register.js
+│           ├── Login.js
+│           ├── AdminPanel.js
+│           ├── VoterPanel.js
+│           ├── VoteForm.js
+│           ├── Results.js
+│           └── ElectionList.js
+├── database/
+│   └── schema.sql
+├── assets/
+│   └── screenshots/
+└── package.json            # Root: runs both servers together
 ```
 
-## 2. Install backend dependencies
+---
+
+## Setup
+
+### 1. Clone the repository
 
 ```bash
+git clone https://github.com/kavithasiddesh2003-collab/Online-Voting-System.git
+cd Online-Voting-System
+```
+
+### 2. Configure environment
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Edit `backend/.env` and fill in your values:
+
+```env
+JWT_SECRET_KEY=your-secret-key
+OTP_HMAC_SALT=your-otp-salt
+HMAC_SIGNING_KEY=your-signing-key
+
+# Twilio (for SMS OTP)
+TWILIO_ACCOUNT_SID=...
+TWILIO_AUTH_TOKEN=...
+TWILIO_PHONE_NUMBER=...
+
+# MySQL (optional — omit to use SQLite)
+MYSQL_HOST=127.0.0.1
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=
+MYSQL_DATABASE=securevote
+```
+
+### 3. Install dependencies
+
+```bash
+# Backend
 pip install -r backend/requirements.txt
-```
 
-## 3. Run backend server (standalone)
-
-```bash
-python backend/run.py
-```
-
-## 4. Install frontend dependencies
-
-```bash
-cd frontend
-npm install
-```
-
-## 5. Run frontend
-
-```bash
-npm start
-```
-
-## Run both frontend + backend together (single command)
-
-From the project root:
-
-```bash
+# Frontend
 npm install
 npm run install:frontend
-npm start
 ```
 
-## 6. Run backend verification tool (optional)
+### 4. Run the app
+
+```bash
+# Both backend + frontend together (recommended)
+npm start
+
+# Or separately
+python backend/run.py        # Flask on http://localhost:5000
+cd frontend && npm start     # React on http://localhost:3000
+```
+
+The app opens at **http://localhost:3000**
+
+---
+
+## Voter Seeding (Optional)
+
+To pre-load voters, place a `database/users.csv` file with columns:
+
+```
+name,phone,role,email,password,voter_id,dob
+```
+
+- Voters need: `name`, `phone`, `voter_id`, `dob`
+- Admin needs: `name`, `email`, `password`, `role=admin`
+- Voter password is auto-generated as `first4letters_of_name + day_of_dob` if not provided
+
+> ⚠️ `database/*.csv` is gitignored. Never commit real personal data to the repository.
+
+To sync the database with an updated CSV from the admin panel, use **Admin → Reload Users**.
+
+---
+
+## System Workflow
+
+1. Admin creates an election, sets candidates, start time, and end time
+2. A Paillier keypair is generated; the private key is split via Shamir Secret Sharing
+3. Voters self-register (pending admin approval) or are pre-seeded via CSV
+4. Voter authenticates with phone + password + SMS OTP
+5. Vote is encrypted client-side before being sent to the server
+6. Encrypted ballot is stored on the public bulletin board
+7. After the election ends, admin tallies using threshold decryption
+8. Results are displayed as a bar chart; individual votes are never revealed
+
+---
+
+## Post-Election Verification
 
 ```bash
 python backend/core/verify.py --election_id 1
 ```
 
-Open the application in your browser:
-
-```
-http://localhost:3000
-```
+Verifies the bulletin board integrity and confirms tallied results match encrypted ballots.
 
 ---
 
-# Applications
+## Screenshots
 
-- College elections
-- Student council voting
-- Company decision polls
-- Community governance voting
+| | |
+|---|---|
+| ![Landing Page](assets/screenshots/1.Landingpage.png) | ![Register](assets/screenshots/2.Register.png) |
+| ![Admin Login](assets/screenshots/3.Adminlogin.png) | ![Admin Panel](assets/screenshots/4.Adminpanel.png) |
+| ![Admin Panel 2](assets/screenshots/5.Adminpanel1.png) | ![Voter Login](assets/screenshots/6.Voterlogin.png) |
+| ![Voter Panel](assets/screenshots/7.voterpanel.png) | |
 
 ---
 
-# Future Improvements
+## Security Notes
 
-- Blockchain-based vote storage
-- Mobile application support
+- `.env` files, `.db` files, `bulletin.json`, `trustee_keys.json`, `private_ledger.json`, and all CSVs are gitignored
+- Never commit real voter data or credentials to the repository
+- Change all default keys in `.env.example` before deploying
+- OTP attempts are rate-limited and stored in a separate SQLite DB (`otp_store.db`)
+
+---
+
+## Future Improvements
+
+- Blockchain-based bulletin board storage
 - Biometric authentication
+- Mobile app support
 - Large-scale election scalability
 
+---
 
-# Online Voting System
-This project is maintained by Kavitha Siddesh.
+## Author
+
+Kavitha Siddesh — Final Year CS Project (SecureVote)
