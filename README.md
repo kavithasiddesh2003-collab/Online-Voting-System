@@ -197,4 +197,4 @@ Verifies the bulletin board integrity and confirms tallied results match encrypt
 
 ## Author
 
-Kavitha Siddesh — Final Year CS Project (SecureVote)
+Kavitha T S
