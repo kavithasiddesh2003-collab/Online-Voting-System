@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api';
 
@@ -7,6 +8,195 @@ function generatePassword(name, dob) {
   const dobPart  = dob ? dob.split('-')[2] : '';
   if (!namePart || !dobPart) return '';
   return namePart + dobPart;
+}
+
+// <input type="date"> always gives/needs ISO (YYYY-MM-DD) internally.
+// The rest of the system (existing voter records, CSV sync) stores DOB as
+// DD-MM-YYYY, so convert only when sending to the backend.
+function isoToDMY(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  if (!y || !m || !d) return iso;
+  return `${d}-${m}-${y}`;
+}
+
+/* Fast DOB picker: typeable year + month dropdown (no clicking through
+   decades one month at a time like the native browser picker). Internal
+   value stays ISO (YYYY-MM-DD) to match the rest of the form's logic. */
+function DOBPicker({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const wrapRef = useRef(null);
+  const popRef = useRef(null);
+  const POPUP_W = 260;
+  const nowY = new Date().getFullYear();
+
+  const initial = value ? new Date(value) : new Date(nowY - 18, 0, 1);
+  const [viewYear, setViewYear] = useState(initial.getFullYear());
+  const [viewMonth, setViewMonth] = useState(initial.getMonth());
+  const [selectedDay, setSelectedDay] = useState(value ? initial.getDate() : null);
+
+  useEffect(() => {
+    if (!value) return;
+    const d = new Date(value);
+    setViewYear(d.getFullYear());
+    setViewMonth(d.getMonth());
+    setSelectedDay(d.getDate());
+  }, [value]);
+
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target) && popRef.current && !popRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  const reposition = useCallback(() => {
+    if (!wrapRef.current) return;
+    const r = wrapRef.current.getBoundingClientRect();
+    const margin = 8;
+    let left = Math.min(r.left, window.innerWidth - POPUP_W - margin);
+    left = Math.max(left, margin);
+    const popH = popRef.current ? popRef.current.offsetHeight : 360;
+    let top = r.bottom + 6;
+    if (top + popH > window.innerHeight - margin) top = Math.max(margin, r.top - popH - 6);
+    setPos({ top, left });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    reposition();
+    const onWin = () => reposition();
+    window.addEventListener('resize', onWin);
+    window.addEventListener('scroll', onWin, true);
+    return () => { window.removeEventListener('resize', onWin); window.removeEventListener('scroll', onWin, true); };
+  }, [open, reposition]);
+
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const dayNames = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  const pad = (n) => String(n).padStart(2, '0');
+  const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+  const firstWeekday = (y, m) => new Date(y, m, 1).getDay();
+
+  const buildGrid = () => {
+    const total = daysInMonth(viewYear, viewMonth);
+    const startWeekday = firstWeekday(viewYear, viewMonth);
+    const prevMonthIdx = viewMonth - 1 < 0 ? 11 : viewMonth - 1;
+    const prevTotal = daysInMonth(viewYear, prevMonthIdx);
+    const cells = [];
+    for (let i = startWeekday - 1; i >= 0; i--) cells.push({ day: prevTotal - i, current: false });
+    for (let d = 1; d <= total; d++) cells.push({ day: d, current: true });
+    let next = 1;
+    while (cells.length % 7 !== 0) cells.push({ day: next++, current: false });
+    return cells;
+  };
+
+  const clampDay = (y, m, d) => Math.min(d, daysInMonth(y, m));
+
+  const [yearDraft, setYearDraft] = useState(String(viewYear));
+  useEffect(() => { setYearDraft(String(viewYear)); }, [viewYear]);
+
+  const stepMonth = (dir) => {
+    let m = viewMonth + dir;
+    let y = viewYear;
+    if (m < 0) { m = 11; y -= 1; }
+    if (m > 11) { m = 0; y += 1; }
+    y = Math.max(1900, Math.min(nowY, y));
+    setViewMonth(m);
+    setViewYear(y);
+    setSelectedDay(d => d ? clampDay(y, m, d) : d);
+  };
+  const stepYear = (dir) => {
+    const y = Math.max(1900, Math.min(nowY, viewYear + dir));
+    setViewYear(y);
+    setSelectedDay(d => d ? clampDay(y, viewMonth, d) : d);
+  };
+  const confirm = () => {
+    if (!selectedDay) { setOpen(false); return; }
+    onChange(`${viewYear}-${pad(viewMonth + 1)}-${pad(selectedDay)}`);
+    setOpen(false);
+  };
+  const cancel = () => setOpen(false);
+  const clearVal = () => { onChange(''); setSelectedDay(null); setOpen(false); };
+
+  const displayVal = value
+    ? `${pad(new Date(value).getDate())}-${pad(new Date(value).getMonth() + 1)}-${new Date(value).getFullYear()}`
+    : '';
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <input className="rg-input" readOnly placeholder="dd-mm-yyyy" value={displayVal}
+        onClick={() => setOpen(o => !o)} style={{ cursor: 'pointer' }} />
+      {open && ReactDOM.createPortal(
+        <div ref={popRef} style={{ position: 'fixed', zIndex: 1200, top: pos.top, left: pos.left, background: '#03101f', border: '1px solid rgba(0,229,255,0.25)', borderRadius: 6, padding: 12, width: POPUP_W, maxWidth: 'calc(100vw - 16px)', boxSizing: 'border-box', boxShadow: '0 10px 30px rgba(0,0,0,0.6)', fontFamily: "'Rajdhani', sans-serif" }}>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+            <select
+              value={viewMonth}
+              onChange={e => { const m = Number(e.target.value); setViewMonth(m); setSelectedDay(d => d ? clampDay(viewYear, m, d) : d); }}
+              onWheel={e => { e.preventDefault(); stepMonth(e.deltaY < 0 ? -1 : 1); }}
+              style={{ flex: 1, background: 'rgba(0,30,70,0.6)', border: '1px solid rgba(0,229,255,0.25)', color: '#e0f4ff', borderRadius: 4, padding: '4px 6px', fontSize: 13 }}
+            >
+              {monthNames.map((mn, i) => <option key={mn} value={i}>{mn}</option>)}
+            </select>
+            <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid rgba(0,229,255,0.25)', borderRadius: 4, overflow: 'hidden' }}>
+              <button type="button" onClick={() => stepMonth(-1)} style={{ background: 'rgba(0,229,255,0.08)', border: 'none', color: '#00e5ff', cursor: 'pointer', width: 18, height: 12, fontSize: 9, lineHeight: 1 }}>▲</button>
+              <button type="button" onClick={() => stepMonth(1)} style={{ background: 'rgba(0,229,255,0.08)', border: 'none', color: '#00e5ff', cursor: 'pointer', width: 18, height: 12, fontSize: 9, lineHeight: 1 }}>▼</button>
+            </div>
+            <input
+              type="text" inputMode="numeric" value={yearDraft} className="rg-year-input"
+              onChange={e => {
+                const v = e.target.value.replace(/[^\d]/g, '').slice(0, 4);
+                setYearDraft(v);
+                if (v.length === 4) {
+                  const y = Math.max(1900, Math.min(nowY, parseInt(v, 10)));
+                  setViewYear(y);
+                  setSelectedDay(d => d ? clampDay(y, viewMonth, d) : d);
+                }
+              }}
+              onBlur={() => {
+                const y = Math.max(1900, Math.min(nowY, parseInt(yearDraft, 10) || viewYear));
+                setViewYear(y);
+                setYearDraft(String(y));
+                setSelectedDay(d => d ? clampDay(y, viewMonth, d) : d);
+              }}
+              onWheel={e => { e.preventDefault(); stepYear(e.deltaY < 0 ? 1 : -1); }}
+              style={{ width: 64, background: 'rgba(0,30,70,0.6)', border: '1px solid rgba(0,229,255,0.25)', color: '#e0f4ff', borderRadius: 4, padding: '4px 6px', fontSize: 13 }}
+            />
+            <div style={{ display: 'flex', flexDirection: 'column', border: '1px solid rgba(0,229,255,0.25)', borderRadius: 4, overflow: 'hidden' }}>
+              <button type="button" onClick={() => stepYear(1)} style={{ background: 'rgba(0,229,255,0.08)', border: 'none', color: '#00e5ff', cursor: 'pointer', width: 18, height: 12, fontSize: 9, lineHeight: 1 }}>▲</button>
+              <button type="button" onClick={() => stepYear(-1)} style={{ background: 'rgba(0,229,255,0.08)', border: 'none', color: '#00e5ff', cursor: 'pointer', width: 18, height: 12, fontSize: 9, lineHeight: 1 }}>▼</button>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 4 }}>
+            {dayNames.map(d => <div key={d} style={{ textAlign: 'center', color: '#00e5ff', fontSize: 10, fontWeight: 700, padding: '3px 0' }}>{d}</div>)}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 10 }}>
+            {buildGrid().map((c, i) => {
+              const isSelected = c.current && c.day === selectedDay;
+              return (
+                <button type="button" key={i} onClick={() => c.current && setSelectedDay(c.day)}
+                  style={{ padding: '5px 0', borderRadius: 4, border: 'none', cursor: c.current ? 'pointer' : 'default',
+                    background: isSelected ? '#00b8d4' : 'transparent',
+                    color: !c.current ? 'rgba(0,229,255,0.15)' : isSelected ? '#00121f' : '#e0f4ff',
+                    fontSize: 12, fontWeight: isSelected ? 700 : 500 }}>
+                  {c.day}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <button type="button" onClick={clearVal} style={{ background: 'none', border: 'none', color: '#00e5ff', cursor: 'pointer', fontSize: 12, padding: 0 }}>Clear</button>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button type="button" onClick={cancel} style={{ background: 'none', border: '1px solid rgba(0,229,255,0.3)', color: '#8bd8ea', borderRadius: 4, padding: '4px 10px', fontSize: 12, cursor: 'pointer' }}>Cancel</button>
+              <button type="button" onClick={confirm} style={{ background: '#00b8d4', color: '#00121f', border: 'none', borderRadius: 4, padding: '4px 12px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>OK</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
 }
 
 function Register() {
@@ -62,7 +252,7 @@ function Register() {
         name:     fullName.trim(),
         phone:    `+91${phone}`,
         voter_id: voterId,
-        dob,
+        dob: isoToDMY(dob),
         password,
       });
       setMessage(response.data.message);
@@ -92,7 +282,7 @@ function Register() {
         .rg-nav { position: fixed; top: 0; left: 0; right: 0; z-index: 100; display: flex; align-items: center; justify-content: flex-end; padding: 1rem 2rem; background: rgba(2,11,26,0.7); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(0,229,255,0.10); }
         .rg-back { font-family: 'Orbitron', monospace; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.12em; padding: 0.45rem 1.2rem; border-radius: 3px; cursor: pointer; text-transform: uppercase; transition: all 0.25s ease; background: transparent; border: 1px solid rgba(0,229,255,0.4); color: #00e5ff; text-decoration: none; }
         .rg-back:hover { background: rgba(0,229,255,0.08); box-shadow: 0 0 16px rgba(0,229,255,0.3); }
-        .rg-card { position: relative; z-index: 10; width: 100%; max-width: 500px; padding: 1.5rem 2.8rem; background: rgba(0,18,45,0.75); border: 1px solid rgba(0,229,255,0.18); backdrop-filter: blur(16px); animation: rg-fadeUp 0.8s ease both; }
+        .rg-card { position: relative; z-index: 10; width: 100%; max-width: 500px; padding: 1.5rem 2.8rem; background: rgba(0,18,45,0.75); border: 1px solid rgba(0,229,255,0.18); backdrop-filter: blur(16px); animation: rg-fadeUp 0.8s ease backwards; }
         .rg-c { position: absolute; width: 18px; height: 18px; border-color: #00e5ff; border-style: solid; }
         .rg-c-tl { top:-1px; left:-1px; border-width:2px 0 0 2px; }
         .rg-c-tr { top:-1px; right:-1px; border-width:2px 2px 0 0; }
@@ -106,6 +296,9 @@ function Register() {
         .rg-input::placeholder { color: rgba(180,220,255,0.25); }
         .rg-input:focus { border-color: rgba(0,229,255,0.6); background: rgba(0,40,90,0.6); box-shadow: 0 0 16px rgba(0,229,255,0.12); }
         .rg-input[type="date"] { color-scheme: dark; }
+        .rg-year-input::-webkit-outer-spin-button,
+        .rg-year-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .rg-year-input { -moz-appearance: textfield; appearance: textfield; }
         .rg-input[type="date"]::-webkit-calendar-picker-indicator { filter: brightness(0) invert(1) sepia(1) saturate(10) hue-rotate(175deg) brightness(2); opacity: 1; cursor: pointer; width: 20px; height: 20px; }
         .rg-input[type="date"]::-webkit-datetime-edit { color: #e0f4ff; }
         .rg-input[type="date"]::-webkit-datetime-edit-fields-wrapper { color: #e0f4ff; }
@@ -209,8 +402,7 @@ function Register() {
             </div>
             <div className="rg-field" style={{ marginBottom: 0 }}>
               <label>Date of Birth <span style={{ color: '#ff6b6b' }}>*</span></label>
-              <input className="rg-input" type="date"
-                value={dob} onChange={e => setDob(e.target.value)} required />
+              <DOBPicker value={dob} onChange={setDob} />
             </div>
           </div>
 
@@ -218,9 +410,10 @@ function Register() {
           <div className="rg-field">
             <label>Password</label>
             <div className="rg-pass-wrap">
-              <input className="rg-input" type={showPass ? 'text' : 'password'}
+              <input className="rg-input" type="text"
                 placeholder=""
-                autoComplete="one-time-code" data-form-type="other" name="new-secret" value={password} onChange={e => setPassword(e.target.value)} required />
+                autoComplete="off" data-form-type="other" data-lpignore="true" name="new-secret" value={password} onChange={e => setPassword(e.target.value)}
+                style={{ WebkitTextSecurity: showPass ? 'none' : 'disc', textSecurity: showPass ? 'none' : 'disc' }} required />
               <button type="button" className="rg-eye" onClick={() => setShowPass(p => !p)} aria-label="Toggle password">
                 {showPass
                   ? <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -252,9 +445,10 @@ function Register() {
           <div className="rg-field">
             <label>Confirm Password</label>
             <div className="rg-pass-wrap">
-              <input className="rg-input" type={showConfirm ? 'text' : 'password'}
+              <input className="rg-input" type="text"
                 placeholder=""
-                autoComplete="one-time-code" data-form-type="other" name="confirm-secret" value={confirm} onChange={e => setConfirm(e.target.value)} required />
+                autoComplete="off" data-form-type="other" data-lpignore="true" name="confirm-secret" value={confirm} onChange={e => setConfirm(e.target.value)}
+                style={{ WebkitTextSecurity: showConfirm ? 'none' : 'disc', textSecurity: showConfirm ? 'none' : 'disc' }} required />
               <button type="button" className="rg-eye" onClick={() => setShowConfirm(p => !p)} aria-label="Toggle confirm password">
                 {showConfirm
                   ? <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -288,7 +482,7 @@ function Register() {
               <p>By registering and participating in the SecureVote Online Voting System, you agree to be bound by these Terms and Conditions. If you do not agree, you may not register or cast a vote.</p>
 
               <h3>2. Eligibility</h3>
-              <p>You must be a verified eligible voter as determined by the system administrator. Registration does not guarantee the right to vote — your account must be approved by an admin before you can participate.</p>
+              <p>You must be a verified eligible voter as determined by the system administrator. Registration does not guarantee the right to vote — your account must be approved by an admin before you can participate. You must be at least 18 years of age to register and cast a vote; registrations from individuals under 18 will not be accepted.</p>
 
               <h3>3. Account Responsibility</h3>
               <ul>

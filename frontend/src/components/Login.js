@@ -143,9 +143,10 @@ function Login({ onLogin }) {
             <div className="lg-field">
               <label>Password</label>
               <div className="lg-pass-wrap">
-                <input type={showPass ? 'text' : 'password'} value={password}
-                  autoComplete="one-time-code" data-form-type="other"
-                  onChange={(e) => setPassword(e.target.value)} style={{ paddingRight: '3rem' }} required />
+                <input type="text" value={password}
+                  autoComplete="off" data-form-type="other" data-lpignore="true"
+                  onChange={(e) => setPassword(e.target.value)}
+                  style={{ paddingRight: '3rem', WebkitTextSecurity: showPass ? 'none' : 'disc', textSecurity: showPass ? 'none' : 'disc' }} required />
                 <button type="button" className="lg-eye" onClick={() => setShowPass(p => !p)}>
                   {showPass
                     ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -159,7 +160,7 @@ function Login({ onLogin }) {
             <div className="lg-otp-row">
               <div className="lg-field">
                 <label>One-Time Code</label>
-                <input type="text" inputMode="numeric" maxLength={8} value={otp} onChange={(e) => setOtp(e.target.value)} required />
+                <input type="text" inputMode="numeric" maxLength={8} value={otp} autoComplete="one-time-code" onChange={(e) => setOtp(e.target.value)} required />
                 {otpSent && secondsLeft > 0 && <div className="lg-sent-badge">✓ OTP sent — expires in {fmtTime(secondsLeft)}</div>}
                 {otpSent && secondsLeft === 0 && <div className="lg-sent-badge" style={{ color: '#ff6b6b' }}>OTP expired — resend</div>}
               </div>
@@ -182,9 +183,10 @@ function Login({ onLogin }) {
             <div className="lg-field">
               <label>Password</label>
               <div className="lg-pass-wrap">
-                <input type={showPass ? 'text' : 'password'} value={password}
-                  autoComplete="one-time-code" data-form-type="other"
-                  onChange={(e) => setPassword(e.target.value)} style={{ paddingRight: '3rem' }} required />
+                <input type="text" value={password}
+                  autoComplete="off" data-form-type="other" data-lpignore="true"
+                  onChange={(e) => setPassword(e.target.value)}
+                  style={{ paddingRight: '3rem', WebkitTextSecurity: showPass ? 'none' : 'disc', textSecurity: showPass ? 'none' : 'disc' }} required />
                 <button type="button" className="lg-eye" onClick={() => setShowPass(p => !p)}>
                   {showPass
                     ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>

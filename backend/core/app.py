@@ -1,5 +1,6 @@
 # backend/app.py
 import json
+import math
 import os
 import re
 import time
@@ -152,14 +153,14 @@ def register():
     if not dob:
         return jsonify({'error': 'Date of birth is required'}), 400
     try:
-        from datetime import date
-        birth = date.fromisoformat(dob)
-        today = date.today()
+        from datetime import datetime as _dt
+        birth = _dt.strptime(dob, '%d-%m-%Y').date()
+        today = _dt.today().date()
         age = today.year - birth.year - ((today.month, today.day) < (birth.month, birth.day))
         if age < 18:
             return jsonify({'error': 'You must be at least 18 years old to register.'}), 400
     except ValueError:
-        return jsonify({'error': 'Invalid date of birth format.'}), 400
+        return jsonify({'error': 'Invalid date of birth format. Expected DD-MM-YYYY.'}), 400
     phone = _normalize_phone(raw_phone)
 
     existing = get_user(phone)
@@ -417,6 +418,20 @@ def delete_election_route(election_id):
     except Exception:
         pass
 
+    # Critical: also purge this election's entry from the private vote ledger.
+    # Election IDs get reused after deletion (autoincrement reset), and each
+    # election has its own Paillier keypair. Leaving stale ciphertexts behind
+    # under the same election_id key means a future election reusing that ID
+    # would have its real votes homomorphically summed with old ciphertexts
+    # encrypted under a completely different key — corrupting every tally.
+    try:
+        ledger = _read_private_ledger()
+        if str(election_id) in ledger:
+            del ledger[str(election_id)]
+            _write_private_ledger(ledger)
+    except Exception:
+        pass
+
     return jsonify({'message': 'Election deleted'}), 200
 
 
@@ -542,6 +557,28 @@ def cast_vote():
         encrypted_value = str(cdata['value'])
         if not encrypted_value.isdigit():
             return jsonify({'error': 'Invalid ciphertext value'}), 400
+        # Reject anything that isn't a plausible Paillier ciphertext for this election's
+        # public key. Three checks, weakest to strongest:
+        #  1) size bound: 0 < c < n^2
+        #  2) shape bound: a genuine ciphertext is ~uniform over [0, n^2), so it must use
+        #     almost the full bit-length of n^2 — catches hand-typed/small fake values
+        #     that would otherwise slip through check #1 (e.g. someone posting "1" as value)
+        #  3) group membership: gcd(c, n) must be 1, or c cannot be a valid ciphertext
+        election_public_key = json.loads(e[4])
+        n_check = int(election_public_key['n'])
+        cipher_val = int(encrypted_value)
+        n2_check = n_check * n_check
+        if cipher_val <= 0 or cipher_val >= n2_check:
+            return jsonify({'error': 'Invalid ciphertext value'}), 400
+        if cipher_val.bit_length() < 2 * n_check.bit_length() - 8:
+            return jsonify({'error': 'Invalid ciphertext value'}), 400
+        if math.gcd(cipher_val, n_check) != 1:
+            return jsonify({'error': 'Invalid ciphertext value'}), 400
+        # Reject exact-duplicate ciphertexts (replay of a stale/copied vote payload)
+        ledger_check = _read_private_ledger()
+        for votes_list in ledger_check.get(str(election_id), {}).values():
+            if encrypted_value in votes_list:
+                return jsonify({'error': 'This ciphertext has already been recorded'}), 400
     except (KeyError, ValueError, json.JSONDecodeError) as ex:
         return jsonify({'error': f'Malformed ciphertext: {str(ex)}'}), 400
 
@@ -651,8 +688,9 @@ def tally_election():
         else:
             try:
                 count = paillier.decrypt(aggregated[idx])
-                if count < 0:
-                    return jsonify({'error': f'Decryption sanity check failed for {name}'}), 400
+                ballots_for_cand = len(election_ledger.get(str(idx), []))
+                if count < 0 or count > ballots_for_cand:
+                    return jsonify({'error': f'Decryption sanity check failed for {name} — corrupted ciphertext in ledger'}), 400
                 results[name] = int(count)
             except Exception as ex:
                 return jsonify({'error': f'Decryption failed for {name}: {str(ex)}'}), 400
@@ -722,8 +760,9 @@ def tally_election_auto(election_id):
         else:
             try:
                 count = paillier.decrypt(aggregated[idx])
-                if count < 0:
-                    return jsonify({'error': f'Decryption sanity check failed for {name}'}), 400
+                ballots_for_cand = len(election_ledger.get(str(idx), []))
+                if count < 0 or count > ballots_for_cand:
+                    return jsonify({'error': f'Decryption sanity check failed for {name} — corrupted ciphertext in ledger'}), 400
                 results[name] = int(count)
             except Exception as ex:
                 return jsonify({'error': f'Decryption failed for {name}: {str(ex)}'}), 400

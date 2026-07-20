@@ -30,6 +30,155 @@ function CandidateRow({ idx, name, photo, onChange, onRemove }) {
   );
 }
 
+/* ─── custom date/time picker (calendar + hour/min + OK to confirm) ─── */
+function DateTimePicker({ value, onChange, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const wrapRef = useRef(null);
+  const popRef = useRef(null);
+  const POPUP_W = 280;
+
+  const initial = value ? new Date(value) : new Date();
+  const [viewYear, setViewYear] = useState(initial.getFullYear());
+  const [viewMonth, setViewMonth] = useState(initial.getMonth());
+  const [hour, setHour] = useState(initial.getHours());
+  const [minute, setMinute] = useState(initial.getMinutes());
+  const [selectedDay, setSelectedDay] = useState(value ? initial.getDate() : null);
+
+  useEffect(() => {
+    if (!value) return;
+    const d = new Date(value);
+    setViewYear(d.getFullYear());
+    setViewMonth(d.getMonth());
+    setHour(d.getHours());
+    setMinute(d.getMinutes());
+    setSelectedDay(d.getDate());
+  }, [value]);
+
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target) && popRef.current && !popRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  const reposition = useCallback(() => {
+    if (!wrapRef.current) return;
+    const r = wrapRef.current.getBoundingClientRect();
+    const margin = 8;
+    let left = r.left;
+    left = Math.min(left, window.innerWidth - POPUP_W - margin);
+    left = Math.max(left, margin);
+    const popH = popRef.current ? popRef.current.offsetHeight : 400;
+    let top = r.bottom + 6;
+    if (top + popH > window.innerHeight - margin) {
+      top = Math.max(margin, r.top - popH - 6); // flip above if no room below
+    }
+    setPos({ top, left });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    reposition();
+    const onWin = () => reposition();
+    window.addEventListener('resize', onWin);
+    window.addEventListener('scroll', onWin, true);
+    return () => { window.removeEventListener('resize', onWin); window.removeEventListener('scroll', onWin, true); };
+  }, [open, reposition]);
+
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const dayNames = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  const pad = (n) => String(n).padStart(2, '0');
+  const daysInMonth = (y, m) => new Date(y, m + 1, 0).getDate();
+  const firstWeekday = (y, m) => new Date(y, m, 1).getDay();
+
+  const buildGrid = () => {
+    const total = daysInMonth(viewYear, viewMonth);
+    const startWeekday = firstWeekday(viewYear, viewMonth);
+    const prevMonthIdx = viewMonth - 1 < 0 ? 11 : viewMonth - 1;
+    const prevTotal = daysInMonth(viewYear, prevMonthIdx);
+    const cells = [];
+    for (let i = startWeekday - 1; i >= 0; i--) cells.push({ day: prevTotal - i, current: false });
+    for (let d = 1; d <= total; d++) cells.push({ day: d, current: true });
+    let next = 1;
+    while (cells.length % 7 !== 0) cells.push({ day: next++, current: false });
+    return cells;
+  };
+
+  const prevMonth = () => { if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); } else setViewMonth(m => m - 1); };
+  const nextMonth = () => { if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); } else setViewMonth(m => m + 1); };
+
+  const confirm = () => {
+    if (!selectedDay) { setOpen(false); return; }
+    onChange(`${viewYear}-${pad(viewMonth + 1)}-${pad(selectedDay)}T${pad(hour)}:${pad(minute)}`);
+    setOpen(false);
+  };
+  const cancel = () => { setOpen(false); if (value) { const d = new Date(value); setViewYear(d.getFullYear()); setViewMonth(d.getMonth()); setHour(d.getHours()); setMinute(d.getMinutes()); setSelectedDay(d.getDate()); } };
+  const goToday = () => { const n = new Date(); setViewYear(n.getFullYear()); setViewMonth(n.getMonth()); setSelectedDay(n.getDate()); setHour(n.getHours()); setMinute(n.getMinutes()); };
+  const clearVal = () => { onChange(''); setSelectedDay(null); setOpen(false); };
+
+  const displayVal = value ? new Date(value).toLocaleString(undefined, { year: 'numeric', month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <input style={{ ...inp, cursor: 'pointer' }} readOnly placeholder={placeholder || ''} value={displayVal} onClick={() => setOpen(o => !o)} />
+      {open && (
+        <div ref={popRef} style={{ position: 'fixed', zIndex: 1200, top: pos.top, left: pos.left, background: '#0f172a', border: '1px solid #2a3a5c', borderRadius: 10, padding: 14, width: POPUP_W, maxWidth: 'calc(100vw - 16px)', boxSizing: 'border-box', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <button type="button" onClick={prevMonth} style={navBtn}>‹</button>
+            <span style={{ color: '#e6eef8', fontWeight: 700, fontSize: 14 }}>{monthNames[viewMonth]} {viewYear}</span>
+            <button type="button" onClick={nextMonth} style={navBtn}>›</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 4 }}>
+            {dayNames.map(d => <div key={d} style={{ textAlign: 'center', color: '#5b7cf6', fontSize: 11, fontWeight: 700, padding: '4px 0' }}>{d}</div>)}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 12 }}>
+            {buildGrid().map((c, i) => {
+              const isSelected = c.current && c.day === selectedDay;
+              return (
+                <button type="button" key={i} onClick={() => c.current && setSelectedDay(c.day)}
+                  style={{ padding: '6px 0', borderRadius: 6, border: 'none', cursor: c.current ? 'pointer' : 'default',
+                    background: isSelected ? '#5b7cf6' : 'transparent',
+                    color: !c.current ? '#3a4a6c' : isSelected ? '#fff' : '#e6eef8',
+                    fontSize: 13, fontWeight: isSelected ? 700 : 500 }}>
+                  {c.day}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14 }}>
+            <div style={sublabel}>Time</div>
+            <input
+              type="number" min={0} max={23} value={pad(hour)}
+              onChange={e => { const v = e.target.value; if (v === '') { setHour(0); return; } setHour(Math.min(23, Math.max(0, parseInt(v, 10) || 0))); }}
+              onBlur={e => setHour(Math.min(23, Math.max(0, parseInt(e.target.value, 10) || 0)))}
+              style={{ ...selStyle, width: 46 }}
+            />
+            <span style={{ color: '#8899aa' }}>:</span>
+            <input
+              type="number" min={0} max={59} value={pad(minute)}
+              onChange={e => { const v = e.target.value; if (v === '') { setMinute(0); return; } setMinute(Math.min(59, Math.max(0, parseInt(v, 10) || 0))); }}
+              onBlur={e => setMinute(Math.min(59, Math.max(0, parseInt(e.target.value, 10) || 0)))}
+              style={{ ...selStyle, width: 46 }}
+            />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button type="button" onClick={clearVal} style={linkBtn}>Clear</button>
+              <button type="button" onClick={goToday} style={linkBtn}>Today</button>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" onClick={cancel} style={{ ...navBtn, padding: '6px 14px' }}>Cancel</button>
+              <button type="button" onClick={confirm} style={{ padding: '6px 16px', background: '#5b7cf6', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>OK</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ─── create election (inline) ─── */
 function CreateElectionForm({ onCreated, onError }) {
   const [name, setName]         = useState('');
@@ -75,11 +224,11 @@ function CreateElectionForm({ onCreated, onError }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
         <div>
           <div style={sublabel}>Start Date & Time <span style={{ color: '#f87171' }}>*</span></div>
-          <input style={inp} type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} />
+          <DateTimePicker value={startTime} onChange={setStartTime} />
         </div>
         <div>
           <div style={sublabel}>End Date & Time <span style={{ color: '#f87171' }}>*</span></div>
-          <input style={inp} type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)} />
+          <DateTimePicker value={endTime} onChange={setEndTime} />
         </div>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -149,11 +298,11 @@ function EditModal({ election, onSave, onClose }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
           <div>
             <div style={sublabel}>Start Date & Time <span style={{ color: '#f87171' }}>*</span></div>
-            <input style={inp} type="datetime-local" value={startTime} onChange={e => setStartTime(e.target.value)} />
+            <DateTimePicker value={startTime} onChange={setStartTime} />
           </div>
           <div>
             <div style={sublabel}>End Date & Time <span style={{ color: '#f87171' }}>*</span></div>
-            <input style={inp} type="datetime-local" value={endTime} onChange={e => setEndTime(e.target.value)} />
+            <DateTimePicker value={endTime} onChange={setEndTime} />
           </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -601,6 +750,9 @@ const inp = { width: '100%', padding: '10px 14px', background: '#0f172a', border
 const card = { background: '#161b2e', borderRadius: 12, padding: '20px', marginBottom: 20, border: '1px solid #1e2a45' };
 const cardTitle = { color: '#e6eef8', fontSize: 16, fontWeight: 700, marginBottom: 16, marginTop: 0 };
 const sublabel = { fontSize: 12, color: '#8899aa', fontWeight: 600, marginBottom: 4 };
+const navBtn = { background: 'none', border: '1px solid #2a3a5c', color: '#e6eef8', borderRadius: 6, cursor: 'pointer', padding: '4px 10px', fontSize: 14 };
+const selStyle = { background: '#1e2a45', border: '1px solid #2a3a5c', color: '#e6eef8', borderRadius: 6, padding: '4px 8px', fontSize: 13 };
+const linkBtn = { background: 'none', border: 'none', color: '#5b7cf6', cursor: 'pointer', fontSize: 13, fontWeight: 600, padding: 0 };
 const th = { padding: '9px 12px', color: '#5b7cf6', fontWeight: 700, textAlign: 'left', borderBottom: '2px solid #1e2a45', whiteSpace: 'nowrap', fontSize: 12, letterSpacing: 0.5 };
 const td = { padding: '9px 12px', color: '#8899aa', verticalAlign: 'middle' };
 const actionBtn = (bg) => ({ padding: '4px 12px', background: bg, color: '#fff', border: 'none', borderRadius: 6, fontWeight: 700, cursor: 'pointer', fontSize: 12 });
