@@ -6,6 +6,7 @@ function Results() {
   const { electionId } = useParams();
   const navigate = useNavigate();
   const [results, setResults] = useState(null);
+  const [photos, setPhotos] = useState({});
   const [electionName, setElectionName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -17,6 +18,7 @@ function Results() {
     try {
       const res = await api.get(`/results/${electionId}`);
       setResults(res.data.results);
+      setPhotos(res.data.candidate_photos || {});
       setElectionName(res.data.name);
       setError('');
     } catch (err) {
@@ -80,8 +82,15 @@ function Results() {
           {sortedEntries.map(([candidate, count], idx) => {
             const heightPct = maxVotes > 0 ? (count / maxVotes) * 100 : 0;
             const color = COLORS[idx % COLORS.length];
+            const photoUrl = photos[candidate];
             return (
               <div key={candidate} style={styles.barGroup}>
+                {photoUrl ? (
+                  <img src={photoUrl} alt={candidate} style={{ ...styles.candidatePhoto, borderColor: color }}
+                    onError={e => { e.target.style.display = 'none'; }} />
+                ) : (
+                  <div style={{ ...styles.candidatePhotoFallback, borderColor: color }}>👤</div>
+                )}
                 <div style={styles.barWrapper}>
                   <span style={{ ...styles.barValue, color }}>{count}</span>
                   <div style={styles.barTrack}>
@@ -109,10 +118,19 @@ function Results() {
         {sortedEntries.map(([candidate, count], idx) => {
           const percentage = totalVotes > 0 ? ((count / totalVotes) * 100).toFixed(1) : 0;
           const color = COLORS[idx % COLORS.length];
+          const photoUrl = photos[candidate];
           return (
             <div key={candidate} style={styles.resultRow}>
               <div style={styles.candidateInfo}>
-                <span style={{ ...styles.candidateName, color }}>{candidate}</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  {photoUrl ? (
+                    <img src={photoUrl} alt={candidate} style={{ ...styles.rowPhoto, borderColor: color }}
+                      onError={e => { e.target.style.display = 'none'; }} />
+                  ) : (
+                    <span style={{ ...styles.rowPhotoFallback, borderColor: color }}>👤</span>
+                  )}
+                  <span style={{ ...styles.candidateName, color }}>{candidate}</span>
+                </span>
                 <span style={{ ...styles.percentage, color }}>{percentage}%</span>
               </div>
               <div style={styles.barContainer}>
@@ -163,6 +181,25 @@ const styles = {
   barGroup: {
     display: 'flex', flexDirection: 'column',
     alignItems: 'center', flex: 1, maxWidth: '120px'
+  },
+  candidatePhoto: {
+    width: '48px', height: '48px', borderRadius: '50%',
+    objectFit: 'cover', border: '2px solid', marginBottom: '0.5rem'
+  },
+  candidatePhotoFallback: {
+    width: '48px', height: '48px', borderRadius: '50%',
+    border: '2px solid', marginBottom: '0.5rem',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: '1.4rem', background: '#0F1725'
+  },
+  rowPhoto: {
+    width: '28px', height: '28px', borderRadius: '50%',
+    objectFit: 'cover', border: '2px solid'
+  },
+  rowPhotoFallback: {
+    width: '28px', height: '28px', borderRadius: '50%',
+    border: '2px solid', display: 'flex', alignItems: 'center',
+    justifyContent: 'center', fontSize: '0.9rem', background: '#0F1725'
   },
   barWrapper: {
     display: 'flex', flexDirection: 'column',

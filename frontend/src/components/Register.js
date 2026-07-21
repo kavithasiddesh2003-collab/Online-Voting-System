@@ -386,7 +386,7 @@ function Register() {
                 <span className="rg-prefix">VOT</span>
                 <input className="rg-input" type="text" inputMode="numeric"
                   style={{ borderRadius: '0 2px 2px 0', borderLeft: 'none', flex: 1 }}
-                  maxLength={3} placeholder="001"
+                  maxLength={3} placeholder=""
                   autoComplete="off"
                   value={voterId.replace(/^VOT/, '')}
                   onChange={e => {
