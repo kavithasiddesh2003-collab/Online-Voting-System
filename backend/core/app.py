@@ -780,7 +780,24 @@ def get_results(election_id):
     if e[3] != 'tallied':
         return jsonify({'error': 'Election not yet tallied'}), 400
     res = json.loads(e[5]) if e[5] else {}
-    return jsonify({'election_id': election_id, 'name': e[1], 'status': e[3], 'results': res}), 200
+
+    # Build a name -> photo lookup from the election's stored candidate list
+    # so the results screen can show each candidate's picture next to their votes.
+    photos = {}
+    try:
+        raw_candidates = json.loads(e[2])
+        if raw_candidates and isinstance(raw_candidates[0], dict):
+            photos = {c['name']: c.get('photo', '') for c in raw_candidates}
+    except (json.JSONDecodeError, KeyError, IndexError, TypeError):
+        pass
+
+    return jsonify({
+        'election_id': election_id,
+        'name': e[1],
+        'status': e[3],
+        'results': res,
+        'candidate_photos': photos,
+    }), 200
 
 
 @app.route('/admin/voters/<int:election_id>', methods=['GET'])
